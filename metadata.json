@@ -1,0 +1,6 @@
+{
+  "name": "منيو الكافيه ونظام الحسابات والمديونيات",
+  "description": "بوابة كافيه ومطعم: استعراض المنيو، عجلة الحظ، الربط المباشر مع Google Sheets لتسجيل طلبات الكاشير ومديونيات العملاء فورياً",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
