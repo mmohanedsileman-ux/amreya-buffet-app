@@ -7,17 +7,76 @@
  */
 
 export const WORKING_HOURS_KEY = 'cafe_working_hours_enabled';
+export const WORKING_HOURS_BYPASS_KEY = 'cafe_working_hours_bypass_until';
 export const WORKING_HOURS_SCHEDULE_DATE = '2026-10-01'; // Thursday
 
 export interface WorkingHoursStatus {
   isOpen: boolean;
   isEnforced: boolean;
   isWeekend: boolean;
+  isBypassed: boolean;
+  bypassRemainingMinutes: number;
   scheduledStartDate: string;
   currentHoursText: string;
   closingTimeText: string;
   openingTimeText: string;
 }
+
+/**
+ * Checks if a temporary bypass for testing is currently active
+ */
+export function isWorkingHoursBypassed(): boolean {
+  try {
+    const bypassUntil = localStorage.getItem(WORKING_HOURS_BYPASS_KEY);
+    if (bypassUntil) {
+      const untilNum = Number(bypassUntil);
+      if (!isNaN(untilNum) && untilNum > Date.now()) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Sets temporary bypass for testing (default 2 hours)
+ */
+export function setWorkingHoursBypass(hours: number = 2): void {
+  try {
+    const expireTime = Date.now() + Math.max(0.5, hours) * 3600 * 1000;
+    localStorage.setItem(WORKING_HOURS_BYPASS_KEY, String(expireTime));
+  } catch {}
+}
+
+/**
+ * Cancels the temporary bypass and restores normal working hours lock
+ */
+export function clearWorkingHoursBypass(): void {
+  try {
+    localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+  } catch {}
+}
+
+/**
+ * Returns remaining minutes of the test bypass
+ */
+export function getBypassRemainingMinutes(): number {
+  try {
+    const bypassUntil = localStorage.getItem(WORKING_HOURS_BYPASS_KEY);
+    if (bypassUntil) {
+      const untilNum = Number(bypassUntil);
+      if (!isNaN(untilNum) && untilNum > Date.now()) {
+        return Math.ceil((untilNum - Date.now()) / (60 * 1000));
+      }
+    }
+  } catch {}
+  return 0;
+}
+
+// Clear any test bypass on load as testing is now concluded
+try {
+  localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+} catch {}
 
 /**
  * Checks if a given date is Friday (5) or Saturday (6) - Official Weekend Holidays
@@ -54,10 +113,16 @@ export function isCurrentTimeWithinHours(): boolean {
 
 /**
  * Checks if the working hours lock should be enforced right now:
+ * - If temporary test bypass is active: lock is completely bypassed for testing!
  * - If Admin manually toggled on/off in localStorage, respects that.
  * - Otherwise, automatically activates starting Thursday (2026-10-01).
  */
 export function isWorkingHoursEnforced(): boolean {
+  // If user requested temporary test bypass, do NOT lock!
+  if (isWorkingHoursBypassed()) {
+    return false;
+  }
+
   try {
     const saved = localStorage.getItem(WORKING_HOURS_KEY);
     if (saved !== null) {
@@ -84,16 +149,19 @@ export function setWorkingHoursEnforced(enforced: boolean): void {
  */
 export function getWorkingHoursStatus(): WorkingHoursStatus {
   const now = new Date();
+  const isBypassed = isWorkingHoursBypassed();
   const isEnforced = isWorkingHoursEnforced();
   const isWithin = isCurrentTimeWithinHours();
   const isWeekend = isWeekendHoliday(now);
 
-  const isOpen = !isEnforced || isWithin;
+  const isOpen = isBypassed || !isEnforced || isWithin;
 
   return {
     isOpen,
     isEnforced,
     isWeekend,
+    isBypassed,
+    bypassRemainingMinutes: getBypassRemainingMinutes(),
     scheduledStartDate: WORKING_HOURS_SCHEDULE_DATE,
     currentHoursText: 'من الأحد إلى الخميس: 8:00 ص حتى 3:30 م (الجمعة والسبت عطلة)',
     openingTimeText: '8:00 صباحاً',

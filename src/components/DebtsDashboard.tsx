@@ -38,7 +38,7 @@ interface DebtsDashboardProps {
   onOpenAddCustomer: () => void;
   onOpenCustomerStatement: (customer: Customer) => void;
   onSelectCustomerForOrder: (customer: Customer) => void;
-  onOpenSheetSync: () => void;
+  onOpenSheetSync?: () => void;
   onSyncAllCustomersToSheet?: (forceOverwrite?: boolean) => Promise<{ employeesResult: any; accountsOk: boolean } | void>;
   onSyncEmployeesFromSheet?: () => Promise<boolean>;
   activeSpreadsheetId?: string | null;
@@ -63,7 +63,7 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
 }) => {
   // Target customer for Instant Account Statement Query
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>(
-    customers.find(c => c.code === 'CUST-1003')?.id || customers[0]?.id || ''
+    customers.find(c => c.code === '11998' || c.name.includes('ملهم'))?.id || customers.find(c => c.remainingDebt > 0)?.id || customers[0]?.id || ''
   );
   const [tableSearch, setTableSearch] = useState<string>('');
   const [tableCategory, setTableCategory] = useState<string>('all');
@@ -76,9 +76,6 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
   } | null>(null);
   const [copiedTsvSuccess, setCopiedTsvSuccess] = useState(false);
   const [copiedAccountsSuccess, setCopiedAccountsSuccess] = useState(false);
-  const [isHospitalityModalOpen, setIsHospitalityModalOpen] = useState(false);
-  const [hospitalityItems, setHospitalityItems] = useState('');
-  const [hospitalityNotes, setHospitalityNotes] = useState('');
 
   const handlePullFromSheet = async () => {
     if (!onSyncEmployeesFromSheet) return;
@@ -109,7 +106,7 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
 
   const handleTransferAllCustomers = async (forceOverwrite: boolean = false) => {
     if (!onSyncAllCustomersToSheet) {
-      onOpenSheetSync();
+      onOpenSheetSync?.();
       return;
     }
     setIsSyncingAll(true);
@@ -181,7 +178,7 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
     if (tableCategory === 'over_limit') {
       matchesCat = c.creditLimit > 0 && c.remainingDebt > c.creditLimit;
     } else if (tableCategory !== 'all') {
-      matchesCat = c.category === tableCategory;
+      matchesCat = c.category === tableCategory || (tableCategory === 'ضيوف وإدارة' && (c.category?.includes('ضيوف') || c.name.includes('ضيوف') || c.code === '1000'));
     }
     return matchesSearch && matchesCat;
   });
@@ -205,77 +202,13 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 w-full md:w-auto flex-wrap sm:flex-nowrap">
-          {onSyncEmployeesFromSheet && (
-            <button
-              onClick={handlePullFromSheet}
-              disabled={isPulling || isSyncingAll}
-              className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
-              title="سحب كافة الموظفين والعملاء الذين تم إدخالهم أو تعديلهم يدوياً في شيت جوجل إلى التطبيق فوراً"
-            >
-              {isPulling ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <Download className="w-4 h-4" />
-              )}
-              <span>{isPulling ? 'جاري سحب الشيت...' : 'سحب العملاء من الشيت 📥'}</span>
-            </button>
-          )}
-
-          <button
-            onClick={() => handleTransferAllCustomers(false)}
-            disabled={isSyncingAll || isPulling}
-            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
-            title="نقل وتحديث كافة بيانات الموظفين والعملاء إلى ورقة بينات الموظفين وورقة العملاء_والحسابات بالشيت"
-          >
-            {isSyncingAll ? (
-              <RefreshCw className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            <span>{isSyncingAll ? 'جاري نقل البيانات...' : `نقل كافة العملاء للشيت (${customers.length}) 🚀`}</span>
-          </button>
-
-          <button
-            onClick={handleCopyAccountsTsv}
-            className="flex-none flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-            title="نسخ جدول الحسابات بالكامل مع الأقسام وأرقام الهواتف (لصقه في الخلية A1 في الشيت عبر Ctrl+V)"
-          >
-            {copiedAccountsSuccess ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-emerald-600" />}
-            <span>{copiedAccountsSuccess ? 'تم نسخ الحسابات (A-J)!' : 'نسخ جدول الحسابات (A-J)'}</span>
-          </button>
-
-          <button
-            onClick={handleCopyEmployeesTsv}
-            className="flex-none flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-            title="نسخ جدول الموظفين الثلاثة أعمدة للحافظة"
-          >
-            {copiedTsvSuccess ? <CheckCheck className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-            <span>{copiedTsvSuccess ? 'تم النسخ!' : 'نسخ ورقة الموظفين'}</span>
-          </button>
-
-          <button
-            onClick={onOpenSheetSync}
-            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-[#f4ece3] hover:bg-[#eae0d4] text-[#915829] border border-[#ddcfbf] px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-          >
-            <Download className="w-4 h-4" />
-            <span>خيارات الشيت</span>
-          </button>
-
-          <button
-            onClick={() => setIsHospitalityModalOpen(true)}
-            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-purple-700 hover:bg-purple-800 text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
-            title="تسجيل ضيافة ومشروبات مجانية لضيوف الإدارة فقط"
-          >
-            <span>☕ ضيافة إدارة (ضيوف)</span>
-          </button>
-
+        <div className="flex items-center gap-2.5 w-full md:w-auto">
           <button
             onClick={onOpenAddCustomer}
-            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-[#26201b] hover:bg-[#c48956] text-white px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 bg-[#26201b] hover:bg-[#c48956] text-white px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
           >
             <UserPlus className="w-4 h-4" />
-            <span>+ إضافة عميل</span>
+            <span>+ إضافة عميل / موظف</span>
           </button>
         </div>
       </div>
@@ -627,8 +560,14 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
                   <span className="text-lg font-black text-emerald-700">
                     {kpis.collectionRate}%
                   </span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-300">
-                    {kpis.collectionRate >= 80 ? 'ممتاز' : 'جيد'}
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${
+                    kpis.collectionRate >= 80 
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                      : kpis.collectionRate >= 60
+                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                  }`}>
+                    {kpis.collectionRate >= 80 ? 'ممتاز' : kpis.collectionRate >= 60 ? 'جيد' : 'يحتاج متابعة'}
                   </span>
                 </div>
               </div>
@@ -642,8 +581,8 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
               </div>
             </div>
 
-            {/* Metrics List */}
-            <div className="mt-3.5 space-y-2.5 text-xs">
+            {/* Metrics List matching Sheet */}
+            <div className="mt-3.5 space-y-2 text-xs">
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#faf8f5] border border-[#ece4d9]">
                 <span className="text-[#7d7367]">إجمالي الذمم المعلقة:</span>
                 <strong className="text-rose-600 font-black">{formatCurrency(kpis.totalDebt)}</strong>
@@ -660,14 +599,19 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
               </div>
 
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#faf8f5] border border-[#ece4d9]">
-                <span className="text-[#7d7367]">حساب الإدارة / الضيافة:</span>
-                <strong className="text-amber-800 font-black">{formatCurrency(kpis.managementAccount)}</strong>
+                <span className="text-[#7d7367]">الحد الائتماني المقترح:</span>
+                <strong className="text-[#26201b] font-black">500 ج.م</strong>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-950 font-bold">
-                <span>تسوية الإدارة:</span>
-                <span className="text-xs bg-white px-2 py-0.5 rounded border border-amber-300">
-                  معتمد شهرياً
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#faf8f5] border border-[#ece4d9]">
+                <span className="text-[#7d7367]">حساب الإدارة / الضيافة:</span>
+                <strong className="text-emerald-700 font-black">0 ج.م (تسوية معتمدة)</strong>
+              </div>
+
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#f5efe6] border border-[#e8dfd3] text-[#42372c] font-bold">
+                <span>إجمالي حسابات العملاء المسجلة:</span>
+                <span className="text-xs bg-white px-2 py-0.5 rounded border border-[#ded4c7]">
+                  {customers.length} حساب
                 </span>
               </div>
             </div>
@@ -967,112 +911,6 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Admin Hospitality Modal */}
-      {isHospitalityModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-[#e8e2d9] shadow-2xl space-y-5 text-right">
-            <div className="flex items-center justify-between border-b border-[#f0eae1] pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center font-bold text-lg">
-                  ☕
-                </div>
-                <div>
-                  <h3 className="font-black text-sm text-[#26201b]">تسجيل ضيافة إدارة (ضيوف)</h3>
-                  <p className="text-[11px] text-[#7d7367]">خاص بإدارة الكافتيريا فقط • مجاني بالكامل (0 ج.م)</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setIsHospitalityModalOpen(false)}
-                className="text-gray-400 hover:text-gray-700 font-bold p-1 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-[#42372c] mb-1">
-                  أصناف ومشروبات الضيافة: <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: شاي × 2، فلافل × 3، قهوة × 1"
-                  value={hospitalityItems}
-                  onChange={(e) => setHospitalityItems(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#faf8f5] border border-[#d9d1c7] rounded-xl focus:outline-none focus:border-purple-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#42372c] mb-1">
-                  ملاحظات أو توجيه الإدارة (اختياري):
-                </label>
-                <input
-                  type="text"
-                  placeholder="مثال: ضيافة مكتب رئيس مجلس الإدارة / ضيوف الشؤون الإدارية"
-                  value={hospitalityNotes}
-                  onChange={(e) => setHospitalityNotes(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-[#faf8f5] border border-[#d9d1c7] rounded-xl focus:outline-none focus:border-purple-600"
-                />
-              </div>
-
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-950 font-medium">
-                🔒 يتم تسجيل هذا الطلب حصراً باسم <strong>«ضيوف»</strong> وبقيمة <strong>0 ج.م</strong>، ويُرسل فوراً إلى ورقة «سجل_الطلبات».
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-[#f0eae1]">
-              <button
-                type="button"
-                disabled={!hospitalityItems.trim()}
-                onClick={() => {
-                  const randomNum = Math.floor(1000 + Math.random() * 9000);
-                  const newOrder: Order = {
-                    id: `ORD-${randomNum}`,
-                    orderNumber: randomNum,
-                    createdAt: new Date().toISOString(),
-                    items: [
-                      {
-                        name: hospitalityItems.trim(),
-                        quantity: 1,
-                        price: 0,
-                        total: 0,
-                      }
-                    ],
-                    subtotal: 0,
-                    discount: 0,
-                    totalAmount: 0,
-                    paymentMethod: 'cash',
-                    customerId: 'CUST-GUESTS',
-                    customerName: 'ضيوف',
-                    paidAmount: 0,
-                    remainingAmount: 0,
-                    notes: hospitalityNotes.trim() ? hospitalityNotes.trim() : 'ضيافة إدارة ومشروبات مجانية',
-                    cashierName: 'إدارة الكافيتريا',
-                  };
-
-                  onRecordHospitalityOrder?.(newOrder);
-                  setHospitalityItems('');
-                  setHospitalityNotes('');
-                  setIsHospitalityModalOpen(false);
-                }}
-                className="flex-1 bg-purple-700 hover:bg-purple-800 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors cursor-pointer"
-              >
-                تأكيد تسجيل الضيافة في الشيت ✔️
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsHospitalityModalOpen(false)}
-                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl text-xs cursor-pointer"
-              >
-                إلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

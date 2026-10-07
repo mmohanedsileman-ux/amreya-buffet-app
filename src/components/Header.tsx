@@ -23,7 +23,7 @@ interface HeaderProps {
   setIsCartOpen: (open: boolean) => void;
   onOpenQuickPayment: () => void;
   onOpenAddCustomer: () => void;
-  onOpenSheetSync: () => void;
+  onOpenSheetSync?: () => void;
   onOpenLuckyWheel: () => void;
   totalDebt: number;
   activeCustomer: any;
@@ -236,32 +236,16 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
 
                 {isAdminMode && (
-                  <>
-                    <button
-                      onClick={() => {
-                        onOpenAddCustomer();
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-right px-3.5 py-2 flex items-center gap-2.5 text-[#d8cfc4] hover:bg-[#322c26] transition-colors cursor-pointer"
-                    >
-                      <User className="w-3.5 h-3.5" />
-                      <span>+ إضافة حساب عميل جديد</span>
-                    </button>
-
-                    <div className="h-px bg-[#3a322b] my-1" />
-                    <button
-                      onClick={() => {
-                        onOpenSheetSync();
-                        setIsMenuOpen(false);
-                      }}
-                      className="w-full text-right px-3.5 py-2 flex items-center justify-between text-[#d8cfc4] hover:bg-[#322c26] transition-colors cursor-pointer"
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                        <span>إعدادات Google Sheets</span>
-                      </span>
-                    </button>
-                  </>
+                  <button
+                    onClick={() => {
+                      onOpenAddCustomer();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-right px-3.5 py-2 flex items-center gap-2.5 text-[#d8cfc4] hover:bg-[#322c26] transition-colors cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5" />
+                    <span>+ إضافة حساب عميل جديد</span>
+                  </button>
                 )}
               </div>
             )}

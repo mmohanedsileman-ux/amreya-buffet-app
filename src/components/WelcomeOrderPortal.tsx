@@ -145,8 +145,8 @@ export const WelcomeOrderPortal: React.FC<WelcomeOrderPortalProps> = ({
   };
 
   const matchesCustomer = (c: Customer, inputClean: string, inputDigits: string): boolean => {
-    // STRICT GUARD: Hospitality accounts are NEVER accessible as employee login!
-    if (c.category === 'ضيوف وإدارة' || c.code === '1000' || c.id === 'CUST-1001' || c.name.includes('ضيوف') || c.name.includes('إدارة')) {
+    // Registered employees only
+    if (c.category === 'عميل خارجي' || c.code === 'GUEST' || c.name.includes('عميل خارجي') || c.name.includes('زائر خارجي')) {
       return false;
     }
 

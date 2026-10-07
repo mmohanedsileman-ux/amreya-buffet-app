@@ -35,9 +35,9 @@ interface CartDrawerProps {
 
 export const isGuestOrExternalCustomer = (customer?: Customer | null): boolean => {
   if (!customer) return true;
-  if (customer.category === 'عميل خارجي' || customer.category === 'ضيوف وإدارة') return true;
-  if (customer.code === 'GUEST' || customer.code === '1000' || customer.id?.startsWith('CUST-GUEST') || customer.id === 'CUST-1001') return true;
-  if (customer.name?.includes('عميل خارجي') || customer.name?.includes('زائر') || customer.name?.includes('ضيوف') || customer.name?.includes('إدارة')) return true;
+  if (customer.category === 'عميل خارجي') return true;
+  if (customer.code === 'GUEST' || customer.id?.startsWith('CUST-GUEST')) return true;
+  if (customer.name?.includes('عميل خارجي') || customer.name?.includes('زائر خارجي')) return true;
   return false;
 };
 
@@ -122,14 +122,24 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   }, [activeCustomer]);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.itemTotal, 0);
-  const totalAmount = subtotal;
-
   // Selected customer for debt order:
   const selectedDebtCustomer = customers.find(c => c.id === selectedCustomerId) || eligibleDebtCustomers[0];
   const selectedCustomer = selectedDebtCustomer;
 
+  // Detect if current order is for Hospitality account (Code 1000 or category 'ضيوف وإدارة' or name contains 'ضيوف')
+  const isHospitalityAccount = Boolean(
+    (activeCustomer && (activeCustomer.code === '1000' || activeCustomer.category === 'ضيوف وإدارة' || activeCustomer.name?.includes('ضيوف'))) ||
+    (isAdminMode && selectedCustomer && (selectedCustomer.code === '1000' || selectedCustomer.category === 'ضيوف وإدارة' || selectedCustomer.name?.includes('ضيوف')))
+  );
+
+  const subtotal = cart.reduce((sum, item) => sum + item.itemTotal, 0);
+  const discountAmount = isHospitalityAccount ? subtotal : 0;
+  const totalAmount = isHospitalityAccount ? 0 : subtotal;
+
   const calculatedPaidAmount = () => {
+    if (isHospitalityAccount) {
+      return 0;
+    }
     if (paymentMethod !== 'debt_account') {
       return totalAmount;
     }
@@ -160,7 +170,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     // CRITICAL: Determine customer for order strictly and never default an unauthenticated cash customer to another employee!
     let customerForOrder: Customer | undefined = undefined;
 
-    if (isRegisteredEmployee && effectiveActiveCustomer) {
+    if (isHospitalityAccount) {
+      customerForOrder = activeCustomer || selectedCustomer || customers.find(c => c.code === '1000');
+    } else if (isRegisteredEmployee && effectiveActiveCustomer) {
       // 100% Guaranteed: Registered employee ALWAYS gets their own account
       customerForOrder = effectiveActiveCustomer;
     } else if (isAdminMode && paymentMethod === 'debt_account') {
@@ -171,7 +183,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
 
     // Guard: External customers / visitors can NEVER checkout on debt
-    if (paymentMethod === 'debt_account' && isGuestOrExternalCustomer(customerForOrder)) {
+    if (!isHospitalityAccount && paymentMethod === 'debt_account' && isGuestOrExternalCustomer(customerForOrder)) {
       setOrderError('عذراً، نظام على الحساب (الآجل) مخصص للموظفين المسجلين فقط، ولا يُتاح للعملاء الخارجيين.');
       setPaymentMethod('cash');
       isSubmittingRef.current = false;
@@ -181,13 +193,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setOrderError(null);
 
     const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const finalCustomerId = (isRegisteredEmployee && effectiveActiveCustomer)
-      ? effectiveActiveCustomer.id
-      : (customerForOrder ? customerForOrder.id : 'CUST-EXTERNAL');
+    const finalCustomerId = isHospitalityAccount
+      ? (activeCustomer?.id || selectedCustomer?.id || 'CUST-1000')
+      : (isRegisteredEmployee && effectiveActiveCustomer)
+        ? effectiveActiveCustomer.id
+        : (customerForOrder ? customerForOrder.id : 'CUST-EXTERNAL');
 
-    const finalCustomerName = (isRegisteredEmployee && effectiveActiveCustomer)
-      ? effectiveActiveCustomer.name
-      : (customerForOrder ? customerForOrder.name : 'عميل نقدي خارجي');
+    const finalCustomerName = isHospitalityAccount
+      ? 'ضيوف - 1000'
+      : (isRegisteredEmployee && effectiveActiveCustomer)
+        ? effectiveActiveCustomer.name
+        : (customerForOrder ? customerForOrder.name : 'عميل نقدي خارجي');
+
+    const finalNotes = isHospitalityAccount
+      ? (cashierNotes.trim() ? cashierNotes.trim() : 'طلب ضيافة معتمد')
+      : (cashierNotes.trim() ? cashierNotes.trim() : undefined);
 
     const newOrder: Order = {
       id: `ORD-${randomNum}`,
@@ -202,15 +222,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         total: item.itemTotal,
       })),
       subtotal: subtotal,
-      discount: 0,
+      discount: discountAmount,
       totalAmount: totalAmount,
-      paymentMethod: paymentMethod,
+      paymentMethod: isHospitalityAccount ? 'cash' : paymentMethod,
       customerId: finalCustomerId,
       customerName: finalCustomerName,
       paidAmount: paid,
       remainingAmount: remaining,
-      notes: cashierNotes.trim() ? cashierNotes.trim() : undefined,
-      cashierName: isAdminMode ? 'كاشير الكافتيريا' : 'طلب ذاتي (بوابة الموظف)',
+      notes: finalNotes,
+      cashierName: isAdminMode ? 'كاشير الكافتيريا' : (isHospitalityAccount ? 'طلب ضيافة (حساب 1000)' : 'طلب ذاتي (بوابة الموظف)'),
     };
 
     onCheckoutComplete(newOrder);
@@ -363,59 +383,87 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                   <span>مجموع الطلب:</span>
                   <span className="font-bold text-[#26201b]">{formatCurrency(subtotal)}</span>
                 </div>
+
+                {isHospitalityAccount && (
+                  <div className="flex items-center justify-between text-xs text-purple-900 bg-purple-50 p-2 rounded-lg border border-purple-200 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <span>☕</span>
+                      <span>خصم الضيافة (100% مجاني):</span>
+                    </span>
+                    <span className="font-black text-purple-700">-{formatCurrency(subtotal)}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between text-sm font-black text-[#26201b] pt-1.5 border-t border-[#e5dcd1]">
                   <span>الإجمالي المستحق:</span>
-                  <span className="text-base font-black text-[#915829]">
-                    {formatCurrency(totalAmount)}
+                  <span className={`text-base font-black ${isHospitalityAccount ? 'text-emerald-700' : 'text-[#915829]'}`}>
+                    {isHospitalityAccount ? '0 ج.م (ضيافة مجانية)' : formatCurrency(totalAmount)}
                   </span>
                 </div>
               </div>
 
               {/* Payment Method Selector */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-[#4a4237]">
-                    طريقة المحاسبة والسداد:
-                  </label>
-                  {isAdminMode && (
-                    <span className="text-[10px] bg-purple-100 text-purple-900 font-black px-2 py-0.5 rounded-md">
-                      صلاحيات الكاشير والإدارة 🔑
+              {isHospitalityAccount ? (
+                <div className="p-3.5 bg-purple-50 border-2 border-purple-300 rounded-xl space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">☕</span>
+                      <span className="text-xs font-black text-purple-950">حساب الضيافة والضيوف (1000)</span>
+                    </div>
+                    <span className="text-[10px] bg-purple-700 text-white font-black px-2.5 py-0.5 rounded-full shadow-2xs">
+                      مجاني 100%
                     </span>
-                  )}
+                  </div>
+                  <p className="text-[11px] text-purple-800 leading-relaxed font-medium">
+                    طلب ضيافة معتمد لضيوف الإدارة بقيمة 0 ج.م دون أي مديونية أو دفع نقدي.
+                  </p>
                 </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-[#4a4237]">
+                      طريقة المحاسبة والسداد:
+                    </label>
+                    {isAdminMode && (
+                      <span className="text-[10px] bg-purple-100 text-purple-900 font-black px-2 py-0.5 rounded-md">
+                        صلاحيات الكاشير والإدارة 🔑
+                      </span>
+                    )}
+                  </div>
 
-                <div className={`grid gap-2 ${isDebtAllowed ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {/* Option 1: Cash */}
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('cash')}
-                    className={`flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer ${
-                      paymentMethod === 'cash'
-                        ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black shadow-xs ring-1 ring-emerald-600'
-                        : 'border-[#dcd4c8] bg-[#fbf9f6] text-[#63594e] hover:bg-[#f3ede4]'
-                    }`}
-                  >
-                    <Banknote className="w-4 h-4 text-emerald-600" />
-                    <span>نقدي (كاش)</span>
-                  </button>
-
-                  {/* Option 2: Debt (if allowed or admin) */}
-                  {(isDebtAllowed || isAdminMode) && (
+                  <div className={`grid gap-2 ${isDebtAllowed ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    {/* Option 1: Cash */}
                     <button
                       type="button"
-                      onClick={() => setPaymentMethod('debt_account')}
+                      onClick={() => setPaymentMethod('cash')}
                       className={`flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer ${
-                        paymentMethod === 'debt_account'
-                          ? 'border-amber-600 bg-amber-50 text-amber-950 font-black shadow-xs ring-1 ring-amber-600'
+                        paymentMethod === 'cash'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-black shadow-xs ring-1 ring-emerald-600'
                           : 'border-[#dcd4c8] bg-[#fbf9f6] text-[#63594e] hover:bg-[#f3ede4]'
                       }`}
                     >
-                      <UserCheck className="w-4 h-4 text-amber-700" />
-                      <span>على الحساب (آجل)</span>
+                      <Banknote className="w-4 h-4 text-emerald-600" />
+                      <span>نقدي (كاش)</span>
                     </button>
-                  )}
+
+                    {/* Option 2: Debt (if allowed or admin) */}
+                    {(isDebtAllowed || isAdminMode) && (
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('debt_account')}
+                        className={`flex items-center justify-center gap-1.5 p-2.5 rounded-xl text-xs font-bold border-2 transition-all cursor-pointer ${
+                          paymentMethod === 'debt_account'
+                            ? 'border-amber-600 bg-amber-50 text-amber-950 font-black shadow-xs ring-1 ring-amber-600'
+                            : 'border-[#dcd4c8] bg-[#fbf9f6] text-[#63594e] hover:bg-[#f3ede4]'
+                        }`}
+                      >
+                        <UserCheck className="w-4 h-4 text-amber-700" />
+                        <span>على الحساب (آجل)</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* If Debt Account is Selected: Customer Picker & Balances */}
               {paymentMethod === 'debt_account' && (
@@ -440,7 +488,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     <>
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-amber-900">
-                          اختر الموظف أو حساب الضيافة:
+                          اختر الموظف:
                         </label>
                         <button
                           onClick={onOpenAddCustomer}
@@ -558,12 +606,18 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 type="button"
                 onClick={handleCreateOrder}
                 disabled={isSubmitting || justSubmitted || cart.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-white bg-[#26201b] hover:bg-[#c48956]"
+                className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+                  isHospitalityAccount 
+                    ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-400/50' 
+                    : 'bg-[#26201b] hover:bg-[#c48956]'
+                }`}
               >
                 <span>
                   {isSubmitting || justSubmitted
                     ? 'جاري تأكيد وتسجيل الطلب... ⏳' 
-                    : `إتمام الطلب (${formatCurrency(totalAmount)})`}
+                    : isHospitalityAccount
+                      ? 'إتمام طلب الضيافة (مجاني 0 ج.م) ☕'
+                      : `إتمام الطلب (${formatCurrency(totalAmount)})`}
                 </span>
                 <ArrowRight className="w-4 h-4 rotate-180" />
               </button>

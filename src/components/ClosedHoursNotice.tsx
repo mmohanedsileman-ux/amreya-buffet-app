@@ -83,7 +83,7 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
             </p>
           </div>
 
-          {/* Admin / Management Access */}
+          {/* Admin Access */}
           <div className="pt-2 flex flex-col gap-2.5">
             {!showAdminPinPrompt ? (
               <button

@@ -121,8 +121,8 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f0eae1]">
-                    {customerOrders.map(o => (
-                      <tr key={o.id} className="hover:bg-[#faf7f2]">
+                    {customerOrders.map((o, idx) => (
+                      <tr key={`${o.id || 'ord'}-${idx}`} className="hover:bg-[#faf7f2]">
                         <td className="py-2 px-3">
                           <span className="font-bold"># {o.orderNumber}</span>
                           <span className="text-[10px] text-[#8c8072] block">{formatDateTime(o.createdAt)}</span>
@@ -172,8 +172,8 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#f0eae1]">
-                    {customerTxns.map(t => (
-                      <tr key={t.id} className="hover:bg-[#faf7f2]">
+                    {customerTxns.map((t, idx) => (
+                      <tr key={`${t.id || 'txn'}-${idx}`} className="hover:bg-[#faf7f2]">
                         <td className="py-2 px-3">
                           <span className="font-bold">{t.receiptNumber || t.id}</span>
                           <span className="text-[10px] text-[#8c8072] block">{formatDateTime(t.createdAt)}</span>

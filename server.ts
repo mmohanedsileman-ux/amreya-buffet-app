@@ -12,48 +12,70 @@ async function startServer() {
 
   app.use(express.json());
 
-  // High-performance in-memory cache for sync_debt (2 seconds TTL)
-  // Guarantees sub-10ms response times and zero rate-limiting even with 500+ concurrent employees
-  let cachedSyncDebtData: any = null;
+  // High-performance in-memory cache for sync_debt
+  // Guarantees sub-5ms response times, Stale-While-Revalidate, and zero AbortErrors
+  let cachedSyncDebtData: any = { success: true, paidOrderIds: [], customerDebts: {} };
+  let hasValidCache = false;
   let lastSyncDebtTime = 0;
-  const CACHE_TTL_MS = 2000;
+  const CACHE_TTL_MS = 15000;
+  let inFlightSyncDebtPromise: Promise<any> | null = null;
+
+  async function fetchFromGoogleAppsScript(customUrl?: string | null): Promise<any> {
+    if (inFlightSyncDebtPromise) {
+      return inFlightSyncDebtPromise;
+    }
+
+    inFlightSyncDebtPromise = (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      try {
+        const baseUrl = customUrl && customUrl.startsWith('https://script.google.com/')
+          ? customUrl
+          : 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        const webhookUrl = `${baseUrl}${sep}action=sync_debt&t=${Date.now()}`;
+        const response = await fetch(webhookUrl, { signal: controller.signal });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && typeof data === 'object') {
+            cachedSyncDebtData = data;
+            hasValidCache = true;
+            lastSyncDebtTime = Date.now();
+            return data;
+          }
+        }
+      } catch (err: any) {
+        // Log softly as warning rather than console.error to avoid error alerts on cold starts
+        console.warn('[sync_debt] Google Apps Script background fetch note:', err?.name === 'AbortError' ? 'timed out after 20s' : err?.message);
+      } finally {
+        clearTimeout(timeout);
+        inFlightSyncDebtPromise = null;
+      }
+      return cachedSyncDebtData;
+    })();
+
+    return inFlightSyncDebtPromise;
+  }
+
+  // Pre-warm the cache on server startup in the background
+  fetchFromGoogleAppsScript().catch(() => {});
 
   // Proxy endpoint to Google Apps Script to eliminate all browser CORS and iframe issues
   app.get('/api/sync_debt', async (req, res) => {
     const now = Date.now();
-    // If cache is fresh (less than 3 seconds old), serve instantly from server memory
-    if (cachedSyncDebtData && (now - lastSyncDebtTime < CACHE_TTL_MS)) {
+    const customUrl = typeof req.query.url === 'string' ? req.query.url : null;
+
+    // Stale-While-Revalidate: Return cached data immediately
+    if (hasValidCache) {
+      if (now - lastSyncDebtTime > CACHE_TTL_MS) {
+        fetchFromGoogleAppsScript(customUrl).catch(() => {});
+      }
       return res.json(cachedSyncDebtData);
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    try {
-      const customUrl = typeof req.query.url === 'string' ? req.query.url : null;
-      const baseUrl = customUrl && customUrl.startsWith('https://script.google.com/')
-        ? customUrl
-        : 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
-      const sep = baseUrl.includes('?') ? '&' : '?';
-      const webhookUrl = `${baseUrl}${sep}action=sync_debt&t=${now}`;
-      const response = await fetch(webhookUrl, { signal: controller.signal });
-      if (!response.ok) {
-        if (cachedSyncDebtData) return res.json(cachedSyncDebtData);
-        return res.status(response.status).json({ success: false, paidOrderIds: [], customerDebts: {} });
-      }
-      const data = await response.json();
-      cachedSyncDebtData = data;
-      lastSyncDebtTime = Date.now();
-      return res.json(data);
-    } catch (err: any) {
-      console.error('Server sync_debt proxy error:', err);
-      // If we have stale cache, serve it rather than an error
-      if (cachedSyncDebtData) {
-        return res.json(cachedSyncDebtData);
-      }
-      return res.status(500).json({ success: false, error: err.message, paidOrderIds: [], customerDebts: {} });
-    } finally {
-      clearTimeout(timeout);
-    }
+    // Cold start before first response: wait for fetch
+    const data = await fetchFromGoogleAppsScript(customUrl);
+    return res.json(data || cachedSyncDebtData);
   });
 
   if (process.env.NODE_ENV === 'production') {

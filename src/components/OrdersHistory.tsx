@@ -126,29 +126,6 @@ export const OrdersHistory: React.FC<OrdersHistoryProps> = ({
             <option value="cash">نقدي (كاش)</option>
             <option value="debt_account">على الحساب (آجل)</option>
           </select>
-
-          {/* Sync Orders with Google Sheet Action - ADMIN ONLY */}
-          {isAdmin && onSyncOrdersToSheet && (
-            <button
-              onClick={onSyncOrdersToSheet}
-              disabled={isSyncingOrders}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs disabled:opacity-50"
-              title="مزامنة كافة الفواتير والطلبات المسجلة محلياً مع ورقة سجل_الطلبات في شيت Google فوراً"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncingOrders ? 'animate-spin' : ''}`} />
-              <span>{isSyncingOrders ? 'جاري المزامنة...' : 'مزامنة الفواتير مع الشيت 🔄'}</span>
-            </button>
-          )}
-
-          {isAdmin && !googleUser && onConnectGoogle && (
-            <button
-              onClick={onConnectGoogle}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs"
-              title="تسجيل الدخول بحساب Google لربط ومزامنة الشيت تلقائياً"
-            >
-              <span>تسجيل الدخول لمزامنة الشيت 🔑</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -201,8 +178,8 @@ export const OrdersHistory: React.FC<OrdersHistoryProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredOrders.map(order => (
-                  <tr key={order.id} className="hover:bg-[#faf7f2]/80 transition-colors">
+                filteredOrders.map((order, idx) => (
+                  <tr key={`${order.id || 'ord'}-${idx}`} className="hover:bg-[#faf7f2]/80 transition-colors">
                     <td className="py-3 px-4">
                       <div className="font-black text-[#26201b]"># {order.orderNumber}</div>
                       <div className="text-[10px] text-[#8c8072] flex items-center gap-1 mt-0.5">

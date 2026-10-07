@@ -306,9 +306,9 @@ export const CustomerPortalView: React.FC<CustomerPortalViewProps> = ({
                   </span>
                   <span className="font-black text-rose-700">{formatCurrency(liveDebt)}</span>
                 </div>
-                {pendingDebtOrders.map(order => (
+                {pendingDebtOrders.map((order, idx) => (
                   <div
-                    key={order.id}
+                    key={`${order.id || 'ord'}-${idx}`}
                     className="p-4 rounded-2xl border-2 border-rose-200 bg-rose-50/20 hover:border-rose-300 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
                   >
                     <div className="space-y-1.5">
@@ -389,9 +389,9 @@ export const CustomerPortalView: React.FC<CustomerPortalViewProps> = ({
               </div>
             ) : (
               <div className="space-y-3">
-                {customerTransactions.map(txn => (
+                {customerTransactions.map((txn, idx) => (
                   <div
-                    key={txn.id}
+                    key={`${txn.id || 'txn'}-${idx}`}
                     className="p-4 rounded-2xl border border-[#ece4d9] bg-[#fdfcfb] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                   >
                     <div className="flex items-center gap-3">

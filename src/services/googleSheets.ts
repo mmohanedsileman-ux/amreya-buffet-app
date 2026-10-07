@@ -250,8 +250,8 @@ export function mergeCustomersFromSheet(localCustomers: Customer[], sheetCustome
         name: match.name, // Sheet name ALWAYS takes precedence!
         department: match.department || lc.department,
         phone: match.phone || lc.phone,
-        totalOrders: match.totalOrders !== undefined && match.totalOrders > 0 ? match.totalOrders : lc.totalOrders,
-        totalPaid: match.totalPaid !== undefined && match.totalPaid > 0 ? match.totalPaid : lc.totalPaid,
+        totalOrders: match.totalOrders !== undefined ? match.totalOrders : lc.totalOrders,
+        totalPaid: match.totalPaid !== undefined ? match.totalPaid : lc.totalPaid,
         remainingDebt: match.remainingDebt !== undefined ? match.remainingDebt : lc.remainingDebt,
         status: (match.remainingDebt !== undefined ? (match.remainingDebt > 0 ? 'مدين' : 'مسدد بالكامل') : lc.status),
       };
@@ -461,36 +461,36 @@ export function formatOrderToSheetRow(order: Order, customer?: Customer | null):
     }
   }
 
-  // Guard: A registered employee can NEVER be a guest or hospitality order under any circumstance!
+  // Guard: Determine if customer is a registered employee
   const isRegisteredEmployee = Boolean(
     resolvedCust && 
-    (resolvedCust.category === 'موظف' || digitsFromOrder) && 
-    !resolvedCust.name.includes('ضيوف') &&
-    resolvedCust.code !== '1000' &&
-    resolvedCust.code !== 'GUEST'
+    (resolvedCust.category === 'موظف' || digitsFromOrder)
   );
 
-  // Check if this is explicitly an Admin hospitality / Guests order (Strictly when NOT a registered employee)
-  const isGuestHospitalityOrder = !isRegisteredEmployee && 
-    (order.customerId === 'CUST-GUESTS' || order.customerName === 'ضيوف') && 
-    Number(order.totalAmount) === 0 && 
-    !digitsFromOrder;
+  // Check if this is a hospitality order (Account 1000 or guests)
+  const isExplicitAdminHospitality = 
+    order.customerId === 'CUST-1000' || 
+    order.customerId === 'CUST-GUESTS' || 
+    order.customerName === 'ضيافة إدارة' || 
+    order.customerName?.includes('ضيوف') ||
+    Boolean(order.discount && order.discount > 0 && order.totalAmount === 0) ||
+    Boolean(resolvedCust && (resolvedCust.code === '1000' || resolvedCust.category === 'ضيوف وإدارة'));
 
   // Column C: اسم العميل (اسم الموظف الحقيقي شاملاً الكود دائماً)
   let customerName = 'عميل نقدي خارجي';
-  if (isRegisteredEmployee && resolvedCust) {
+  if (isExplicitAdminHospitality) {
+    customerName = 'ضيوف - 1000';
+  } else if (isRegisteredEmployee && resolvedCust) {
     customerName = resolvedCust.name.trim();
-  } else if (isGuestHospitalityOrder) {
-    customerName = 'ضيوف';
   } else {
     customerName = (order.customerName || resolvedCust?.name || 'عميل نقدي خارجي').trim();
-    if (customerName === 'ضيوف' && (Number(order.totalAmount) > 0 || !isGuestHospitalityOrder)) {
+    if (customerName === 'ضيوف' || customerName === 'ضيافة') {
       customerName = (resolvedCust?.name && !resolvedCust.name.includes('ضيوف')) ? resolvedCust.name : 'عميل نقدي خارجي';
     }
   }
 
   const empCode = resolvedCust?.code || digitsFromOrder;
-  if (empCode && !customerName.includes(empCode) && !customerName.includes('عميل نقدي') && customerName !== 'ضيوف') {
+  if (empCode && !customerName.includes(empCode) && !customerName.includes('عميل نقدي') && !isExplicitAdminHospitality) {
     customerName = `${customerName} - ${empCode}`;
   }
 
@@ -507,7 +507,7 @@ export function formatOrderToSheetRow(order: Order, customer?: Customer | null):
 
   // Column F: طريقة الدفع
   let paymentMethod = 'نقدي';
-  if (isGuestHospitalityOrder) {
+  if (isExplicitAdminHospitality) {
     paymentMethod = 'ضيافة (مجاني)';
   } else if (order.paymentMethod === 'debt_account') {
     paymentMethod = 'أجل (حساب موظف)';
@@ -519,7 +519,7 @@ export function formatOrderToSheetRow(order: Order, customer?: Customer | null):
 
   // Column G: حالة السداد
   let paymentStatus = 'مسدد فوراً';
-  if (isGuestHospitalityOrder) {
+  if (isExplicitAdminHospitality) {
     paymentStatus = 'مسدد فوراً';
   } else if (order.remainingAmount > 0 && order.paidAmount === 0) {
     paymentStatus = 'معلق (على الحساب)';
@@ -532,7 +532,7 @@ export function formatOrderToSheetRow(order: Order, customer?: Customer | null):
   // Column H: ملاحظات
   const notes = order.notes && order.notes.trim() && order.notes !== '-'
     ? order.notes.trim()
-    : (isGuestHospitalityOrder ? 'ضيافة إدارة ومشروبات مجانية' : '');
+    : (isExplicitAdminHospitality ? 'طلب ضيافة معتمد' : '');
 
   return [
     orderId,        // A: رقم الطلب
@@ -711,7 +711,7 @@ function doPost(e) {
     var orderCols = row.slice(0, 8);
     sheet.getRange(nextRow, 1, 1, orderCols.length).setValues([orderCols]);
 
-    // إذا كان الطلب مسدداً فوراً (كاش/انستاباي/فودافون كاش) أو ضيافة مجانية (0 ج.م):
+    // إذا كان الطلب مسدداً فوراً (كاش/انستاباي/فودافون كاش):
     // نضع علامة صح [✓] تلقائياً في مربع الاختيار بالعمود J (تم السداد) حتى لا يُلوّن الصف بلون المديونية
     var isPaid = String(row[6] || '').indexOf('مسدد') !== -1 || Number(row[4] || 0) === 0;
     try {
@@ -948,7 +948,7 @@ export async function fetchDebtSyncFromWebhook(
 ): Promise<DebtSyncResult> {
   // 1. Try local server-side proxy first (eliminates all browser CORS and iframe issues)
   try {
-    const proxyRes = await fetchWithTimeout(`/api/sync_debt?t=${Date.now()}`, {}, 6000);
+    const proxyRes = await fetchWithTimeout(`/api/sync_debt?t=${Date.now()}`, {}, 12000);
     if (proxyRes.ok) {
       const data = await proxyRes.json();
       if (data && (data.status === 'online' || Array.isArray(data.paidOrderIds))) {

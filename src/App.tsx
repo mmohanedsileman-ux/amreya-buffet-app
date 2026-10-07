@@ -8,14 +8,16 @@ import { ReceiptModal } from './components/ReceiptModal';
 import { PaymentModal } from './components/PaymentModal';
 import { CustomerModal } from './components/CustomerModal';
 import { CustomerStatementModal } from './components/CustomerStatementModal';
-import { SheetSyncModal } from './components/SheetSyncModal';
 import { LuckyWheelModal } from './components/LuckyWheelModal';
 import { CustomerLoginView } from './components/CustomerLoginView';
 import { WelcomeOrderPortal } from './components/WelcomeOrderPortal';
 import { CustomerPortalView } from './components/CustomerPortalView';
 import { CustomerSettleModal } from './components/CustomerSettleModal';
 import { ClosedHoursNotice } from './components/ClosedHoursNotice';
-import { isWorkingHoursEnforced, isCurrentTimeWithinHours } from './utils/workingHours';
+import { 
+  isWorkingHoursEnforced, 
+  isCurrentTimeWithinHours
+} from './utils/workingHours';
 import { 
   Customer, 
   MenuItem, 
@@ -92,57 +94,47 @@ if (typeof window !== 'undefined' && localStorage.getItem(OFFICIAL_LAUNCH_KEY) !
   } catch {}
 }
 
+function deduplicateOrderList(orderList: Order[]): Order[] {
+  const seenIds = new Set<string>();
+  return (orderList || []).filter(o => {
+    if (!o || !o.id) return false;
+    if (seenIds.has(o.id)) return false;
+    seenIds.add(o.id);
+    return true;
+  });
+}
+
 export default function App() {
   // Load persisted data and ALWAYS merge with INITIAL_CUSTOMERS (so mobile browsers never get stuck with old cache)
   const [customers, setCustomers] = useState<Customer[]>(() => {
-    const saved = localStorage.getItem('cafe_customers_data');
-    let parsed: Customer[] = [];
-    if (saved) {
-      try {
-        const loaded = JSON.parse(saved);
-        if (Array.isArray(loaded)) parsed = loaded;
-      } catch {}
-    }
-    const merged = deduplicateCustomers([...INITIAL_CUSTOMERS, ...parsed]);
-
-    // Retrieve saved orders to reconcile demo mock balances
-    let currentOrders: Order[] = INITIAL_ORDERS;
     try {
-      const ordersStr = localStorage.getItem('cafe_orders_data_v2');
-      if (ordersStr) {
-        const loadedOrders = JSON.parse(ordersStr);
-        if (Array.isArray(loadedOrders)) currentOrders = loadedOrders;
+      const saved = localStorage.getItem('cafe_customers_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Merge with INITIAL_CUSTOMERS with INITIAL_CUSTOMERS authoritative sheet balances winning
+          return mergeCustomersFromSheet(parsed, INITIAL_CUSTOMERS);
+        }
       }
     } catch {}
-
-    // Clean legacy mock seed data and reconcile with actual real orders in currentOrders
-    const cleaned: Customer[] = merged.map(c => {
-      const myOrders = currentOrders.filter(o => o.customerId === c.id || (c.code && o.customerName?.includes(c.code)));
-      if (myOrders.length > 0) {
-        const realOrdersTotal = myOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-        const realPaidTotal = myOrders.reduce((sum, o) => sum + (o.paidAmount || 0), 0);
-        const realDebt = myOrders.reduce((sum, o) => sum + (o.remainingAmount || 0), 0);
-        const finalStatus: 'مسدد بالكامل' | 'مدين' = realDebt === 0 ? 'مسدد بالكامل' : 'مدين';
-        return {
-          ...c,
-          totalOrders: Math.max(c.totalOrders, realOrdersTotal),
-          totalPaid: Math.max(c.totalPaid, realPaidTotal),
-          remainingDebt: realDebt,
-          status: finalStatus,
-        };
-      }
-      return c;
-    });
-
-    try {
-      localStorage.setItem('cafe_customers_data', JSON.stringify(cleaned));
-    } catch {}
-    return cleaned;
+    return INITIAL_CUSTOMERS;
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('cafe_orders_data_v2');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    if (!saved) return INITIAL_ORDERS;
+    try {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        const seen = new Set<string>();
+        return parsed.filter(o => {
+          if (!o?.id || o.id.startsWith('ORD-DEBT-') || seen.has(o.id)) return false;
+          seen.add(o.id);
+          return true;
+        });
+      }
+    } catch {}
+    return INITIAL_ORDERS;
   });
 
   const [menuItems, setMenuItems] = useState<MenuItem[]>(() => {
@@ -230,7 +222,6 @@ export default function App() {
   const [paymentTargetCustomer, setPaymentTargetCustomer] = useState<Customer | null>(null);
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [statementCustomer, setStatementCustomer] = useState<Customer | null>(null);
-  const [isSheetSyncModalOpen, setIsSheetSyncModalOpen] = useState(false);
   const [isLuckyWheelOpen, setIsLuckyWheelOpen] = useState(false);
 
   // Google Sheets Integration State
@@ -246,6 +237,17 @@ export default function App() {
     const saved = localStorage.getItem('cafe_auto_sync_enabled');
     return saved !== null ? saved === 'true' : true;
   });
+
+  // Startup: clean any legacy duplicate orders permanently from localStorage & state
+  useEffect(() => {
+    setOrders(prev => {
+      const clean = deduplicateOrderList(prev);
+      try {
+        localStorage.setItem('cafe_orders_data_v2', JSON.stringify(clean));
+      } catch {}
+      return clean;
+    });
+  }, []);
 
   // Google Auth Listener
   useEffect(() => {
@@ -406,12 +408,14 @@ export default function App() {
         const paidSet = new Set(res.paidOrderIds.map(id => id.trim().toLowerCase()));
 
         // 1. Mark paid orders in state synchronously
-        let currentOrdersList: Order[] = orders;
+        let currentOrdersList: Order[] = deduplicateOrderList(orders);
         try {
           const raw = localStorage.getItem('cafe_orders_data_v2');
           if (raw) {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed) && parsed.length > 0) currentOrdersList = parsed;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              currentOrdersList = deduplicateOrderList(parsed);
+            }
           }
         } catch {}
 
@@ -457,31 +461,8 @@ export default function App() {
           if (res.customers && res.customers.length > 0) {
             baseList = mergeCustomersFromSheet(prevCustomers, res.customers);
           }
-
-          // Auto-include any debtors from res.customerDebts that might be missing in local state
-          for (const [key, debtVal] of Object.entries(res.customerDebts)) {
-            if (Number(debtVal) > 0) {
-              const cleanKey = extractCleanEmployeeName(key);
-              const normKey = normalizeArabicName(cleanKey);
-              const exists = baseList.some(c => {
-                const cNorm = normalizeArabicName(extractCleanEmployeeName(c.name));
-                return cNorm === normKey || (c.code && key.includes(c.code)) || (cNorm.length > 3 && normKey.length > 3 && (cNorm.includes(normKey) || normKey.includes(cNorm)));
-              });
-              if (!exists && cleanKey) {
-                const autoCust: Customer = {
-                  id: `CUST-AUTO-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 100)}`,
-                  code: key.replace(/\D/g, '') || String(Math.floor(10000 + Math.random() * 90000)),
-                  name: cleanKey,
-                  category: 'موظف',
-                  totalOrders: Number(debtVal),
-                  totalPaid: 0,
-                  remainingDebt: Number(debtVal),
-                  status: 'مدين',
-                  creditLimit: 500,
-                };
-                baseList.push(autoCust);
-              }
-            }
+          if (!baseList.some(c => c.code === '1000' || c.name.includes('ضيوف'))) {
+            baseList.unshift(INITIAL_CUSTOMERS[0]);
           }
 
           let hasCustomerChanges = baseList.length !== prevCustomers.length;
@@ -561,37 +542,16 @@ export default function App() {
             let baseTotalOrders = sheetMatch?.totalOrders !== undefined ? sheetMatch.totalOrders : cust.totalOrders;
             let baseTotalPaid = sheetMatch?.totalPaid !== undefined ? sheetMatch.totalPaid : cust.totalPaid;
 
-            if (newDebt > 0) {
-              baseTotalOrders = Math.max(cust.totalOrders, newDebt + (cust.totalPaid || 0));
-              baseTotalPaid = Math.max(0, baseTotalOrders - newDebt);
-
-              // If customer has debt from sheet but no local pending order exists, create a virtual invoice card
-              if (myOrders.filter(o => o.remainingAmount > 0).length === 0) {
-                const syntheticDebtOrder: Order = {
-                  id: `ORD-DEBT-${cust.code || cust.id}-${Date.now().toString().slice(-4)}`,
-                  orderNumber: Math.floor(1000 + Math.random() * 9000),
-                  createdAt: new Date().toISOString(),
-                  items: [{
-                    name: 'مسحوبات مسجلة في شيت الحسابات (سجل_الطلبات)',
-                    price: newDebt,
-                    quantity: 1,
-                    total: newDebt,
-                  }],
-                  subtotal: newDebt,
-                  discount: 0,
-                  totalAmount: newDebt,
-                  paidAmount: 0,
-                  remainingAmount: newDebt,
-                  paymentMethod: 'debt_account' as PaymentMethod,
-                  customerId: cust.id,
-                  customerName: cust.name,
-                  cashierName: 'كاشير الكافتيريا',
-                };
-                nextOrders.push(syntheticDebtOrder);
-                hasOrderChanges = true;
+            if (!sheetMatch) {
+              if (newDebt > 0) {
+                baseTotalOrders = Math.max(cust.totalOrders, newDebt + (cust.totalPaid || 0));
+                baseTotalPaid = Math.max(0, baseTotalOrders - newDebt);
+              } else if (newDebt === 0) {
+                baseTotalPaid = Math.max(baseTotalPaid, baseTotalOrders);
               }
-            } else if (newDebt === 0) {
-              baseTotalPaid = Math.max(baseTotalPaid, baseTotalOrders);
+            }
+
+            if (newDebt === 0) {
               // Clear any pending orders for settled customers
               if (liveOrdersRemainingDebt > 0) {
                 myOrders.forEach(o => {
@@ -620,9 +580,15 @@ export default function App() {
           });
 
           if (hasOrderChanges) {
-            setOrders([...nextOrders]);
+            const seenIds = new Set<string>();
+            const dedupedOrders = nextOrders.filter(o => {
+              if (!o?.id || o.id.startsWith('ORD-DEBT-') || seenIds.has(o.id)) return false;
+              seenIds.add(o.id);
+              return true;
+            });
+            setOrders(dedupedOrders);
             try {
-              localStorage.setItem('cafe_orders_data_v2', JSON.stringify(nextOrders));
+              localStorage.setItem('cafe_orders_data_v2', JSON.stringify(dedupedOrders));
             } catch {}
           }
 
@@ -778,7 +744,6 @@ export default function App() {
     const token = googleAccessToken || await getAccessToken();
     const sheetId = activeSpreadsheetId || DEFAULT_SPREADSHEET_ID;
     if (!token || !sheetId) {
-      setIsSheetSyncModalOpen(true);
       return false;
     }
     setIsMenuSyncing(true);
@@ -1495,7 +1460,9 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-[#fcfbf9] text-[#1e1b18]">
       {/* Outside official working hours (8:00 AM - 3:30 PM, or Friday & Saturday weekend): Show Closed Notice */}
       {!isAdminMode && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() ? (
-        <ClosedHoursNotice onSwitchToAdmin={() => setIsAdminMode(true)} />
+        <ClosedHoursNotice 
+          onSwitchToAdmin={() => setIsAdminMode(true)} 
+        />
       ) : !activeCustomer && !isAdminMode ? (
         <WelcomeOrderPortal
           customers={customers}
@@ -1518,7 +1485,6 @@ export default function App() {
               setIsPaymentModalOpen(true);
             }}
             onOpenAddCustomer={() => setIsAddCustomerModalOpen(true)}
-            onOpenSheetSync={() => setIsSheetSyncModalOpen(true)}
             onOpenLuckyWheel={() => {
               if (isEmployee) setIsLuckyWheelOpen(true);
             }}
@@ -1585,7 +1551,6 @@ export default function App() {
                     setActiveTab('menu');
                     setIsCartOpen(true);
                   }}
-                  onOpenSheetSync={() => setIsSheetSyncModalOpen(true)}
                   onSyncAllCustomersToSheet={handleSyncAllCustomersAndEmployeesToSheet}
                   onSyncEmployeesFromSheet={handleSyncEmployeesFromSheet}
                   activeSpreadsheetId={activeSpreadsheetId}
@@ -1710,39 +1675,6 @@ export default function App() {
         onOpenSettleModal={(customer) => {
           setPaymentTargetCustomer(customer);
           setIsPaymentModalOpen(true);
-        }}
-      />
-
-      <SheetSyncModal
-        isOpen={isSheetSyncModalOpen}
-        onClose={() => setIsSheetSyncModalOpen(false)}
-        customers={customers}
-        orders={orders}
-        kpis={kpis}
-        onImportCustomers={handleImportCustomers}
-        onResetToDefault={handleResetToDefault}
-        googleUser={googleUser}
-        googleAccessToken={googleAccessToken}
-        activeSpreadsheetId={activeSpreadsheetId}
-        activeSpreadsheetTitle={activeSpreadsheetTitle}
-        isAutoSyncEnabled={isAutoSyncEnabled}
-        onConnectGoogle={handleConnectGoogle}
-        onDisconnectGoogle={handleDisconnectGoogle}
-        onCreateNewSheet={handleCreateNewSheet}
-        onLinkExistingSheet={handleLinkExistingSheet}
-        onSyncAllOrders={handleSyncAllOrders}
-        onSyncCustomers={handleSyncCustomers}
-        onSyncEmployeesToSheet={handleSyncEmployeesToSheet}
-        onSyncAllCustomersToSheet={handleSyncAllCustomersAndEmployeesToSheet}
-        onToggleAutoSync={setIsAutoSyncEnabled}
-        menuItems={menuItems}
-        onSyncMenuFromSheet={handleSyncMenuFromSheet}
-        onPushMenuToSheet={handlePushMenuToSheet}
-        isSyncingMenu={isMenuSyncing}
-        lastMenuSyncTime={lastMenuSyncTime}
-        onImportMenuItems={(newItems: MenuItem[]) => {
-          setMenuItems(newItems);
-          localStorage.setItem('cafe_menu_data_v3', JSON.stringify(newItems));
         }}
       />
 

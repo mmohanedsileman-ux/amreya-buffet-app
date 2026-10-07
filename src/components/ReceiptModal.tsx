@@ -117,6 +117,12 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
               <span>المجموع الفرعي:</span>
               <span>{formatCurrency(order.subtotal)}</span>
             </div>
+            {order.discount > 0 && (
+              <div className="flex justify-between text-xs text-purple-800 font-bold bg-purple-50 p-1.5 rounded-lg border border-purple-200">
+                <span>☕ خصم الضيافة (100% مجاني):</span>
+                <span>-{formatCurrency(order.discount)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-black text-sm text-[#26201b] pt-1">
               <span>إجمالي الحساب:</span>
               <span className="text-[#915829]">{formatCurrency(order.totalAmount)}</span>

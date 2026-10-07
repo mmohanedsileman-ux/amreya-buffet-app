@@ -97,5 +97,5 @@ export interface SheetKPIs {
   collectionRate: number;    // نسبة التحصيل الفعلية %
   maxSingleDebt: number;     // أعلى مديونية فردية
   avgDebt: number;           // متوسط مديونية العميل
-  managementAccount: number; // حساب الإدارة / الضيافة
+  managementAccount: number; // حساب تسوية الإدارة
 }
