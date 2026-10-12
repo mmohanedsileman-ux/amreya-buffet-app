@@ -60,7 +60,7 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
             <AmreyahBuffetLogo size="xl" className="shadow-2xl" />
           </div>
           <h1 className="text-2xl font-black tracking-tight text-white">
-            بوفية كافية اسمنت العامرية
+            بوفية اسمنت العامرية
           </h1>
           <div className="inline-flex items-center gap-1.5 mt-2 bg-amber-500/20 text-amber-200 border border-amber-400/30 px-3.5 py-1 rounded-full text-xs font-bold">
             {isWeekend ? <Calendar className="w-3.5 h-3.5 text-amber-300" /> : <Moon className="w-3.5 h-3.5" />}

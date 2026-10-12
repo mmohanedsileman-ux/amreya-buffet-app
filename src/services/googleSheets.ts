@@ -577,7 +577,7 @@ export function markOrderAsSynced(orderId: string) {
 
 let cachedTargetOrdersSheetName: string | null = null;
 
-export const APPS_SCRIPT_TEMPLATE = `// كود المزامنة التلقائية الفورية لشيت كافية اسمنت العامرية
+export const APPS_SCRIPT_TEMPLATE = `// كود المزامنة التلقائية الفورية لشيت بوفية اسمنت العامرية
 // الصق هذا الكود في Google Sheets -> Extensions (الإضافات) -> Apps Script
 function doPost(e) {
   try {
@@ -854,7 +854,7 @@ function doGet(e) {
 
     return ContentService.createTextOutput(JSON.stringify({ 
       status: "online", 
-      message: "نظام كافية اسمنت العامرية متصل وجاهز بنجاح",
+      message: "نظام بوفية اسمنت العامرية متصل وجاهز بنجاح",
       menuItems: items,
       paidOrderIds: paidOrderIds,
       customerDebts: customerDebts,
@@ -863,7 +863,7 @@ function doGet(e) {
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ 
       status: "online", 
-      message: "نظام ربط بوفيه كافية اسمنت العامرية يعمل بنجاح",
+      message: "نظام ربط بوفية اسمنت العامرية يعمل بنجاح",
       error: err.toString() 
     })).setMimeType(ContentService.MimeType.JSON);
   }

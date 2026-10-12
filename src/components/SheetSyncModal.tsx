@@ -488,7 +488,7 @@ export const SheetSyncModal: React.FC<SheetSyncModalProps> = ({
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
-                    <span>فتح شيت كافية اسمنت العامرية ↗️</span>
+                    <span>فتح شيت بوفية اسمنت العامرية ↗️</span>
                   </a>
                 </div>
 
