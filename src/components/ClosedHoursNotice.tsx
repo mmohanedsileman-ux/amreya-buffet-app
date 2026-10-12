@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Clock, Coffee, ShieldCheck, Moon, Calendar, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Clock, Coffee, ShieldCheck, Moon, Calendar, AlertCircle, Lock } from 'lucide-react';
 import { AmreyahBuffetLogo } from './AmreyahBuffetLogo';
 import { isWeekendHoliday } from '../utils/workingHours';
+import { getAdminSecurityStatus, recordFailedPinAttempt, resetFailedPinAttempts } from '../utils/security';
 
 interface ClosedHoursNoticeProps {
   onSwitchToAdmin: () => void;
@@ -10,16 +11,43 @@ interface ClosedHoursNoticeProps {
 export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchToAdmin }) => {
   const [showAdminPinPrompt, setShowAdminPinPrompt] = useState(false);
   const [pin, setPin] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [securityStatus, setSecurityStatus] = useState(getAdminSecurityStatus());
   const isWeekend = isWeekendHoliday(new Date());
+
+  // Countdown timer if lockout is active
+  useEffect(() => {
+    if (!securityStatus.isLocked) return;
+    const interval = setInterval(() => {
+      const status = getAdminSecurityStatus();
+      setSecurityStatus(status);
+      if (!status.isLocked) {
+        clearInterval(interval);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [securityStatus.isLocked]);
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (securityStatus.isLocked) {
+      setPinError(`تم قفل المحاولات مؤقتاً لأسباب أمنية. يرجى الانتظار ${securityStatus.remainingLockSeconds} ثانية.`);
+      return;
+    }
+
+    const cleanPin = pin.trim();
     // Official admin & cashier PIN: 11803
-    if (['11803', '14043', '1234', '1148'].includes(pin.trim())) {
+    if (['11803', '14043', '1234', '1148'].includes(cleanPin)) {
+      resetFailedPinAttempts();
       onSwitchToAdmin();
     } else {
-      setPinError(true);
+      const res = recordFailedPinAttempt();
+      setSecurityStatus(getAdminSecurityStatus());
+      if (res.isLocked) {
+        setPinError(`تم حظر المحاولات لمدة 5 دقائق بعد استنفاد محاولات الدخول الخاطئة.`);
+      } else {
+        setPinError(`رمز PIN غير صحيح. متبقي ${res.remainingAttempts} محاولات قبل القفل المؤقت.`);
+      }
     }
   };
 
@@ -97,38 +125,59 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
             ) : (
               <form onSubmit={handlePinSubmit} className="space-y-3 bg-[#faf7f2] p-4 rounded-2xl border border-[#ded5c7]">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#26201b]">رمز PIN للإدارة والكاشير:</span>
+                  <span className="text-xs font-bold text-[#26201b] flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>رمز PIN للإدارة والكاشير:</span>
+                  </span>
                   <button
                     type="button"
-                    onClick={() => setShowAdminPinPrompt(false)}
+                    onClick={() => {
+                      setShowAdminPinPrompt(false);
+                      setPinError('');
+                    }}
                     className="text-xs text-gray-500 hover:text-gray-800"
                   >
                     إلغاء
                   </button>
                 </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={pin}
-                    onChange={(e) => {
-                      setPin(e.target.value);
-                      setPinError(false);
-                    }}
-                    placeholder="أدخل رمز الدخول..."
-                    autoFocus
-                    className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
-                  />
-                  <button
-                    type="submit"
-                    className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-                  >
-                    دخول
-                  </button>
-                </div>
+
+                {securityStatus.isLocked ? (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold space-y-1">
+                    <div className="flex items-center justify-center gap-1 text-rose-800">
+                      <AlertCircle className="w-4 h-4" />
+                      <span>الدخول مغلق مؤقتاً لحماية النظام</span>
+                    </div>
+                    <p className="text-[11px] text-rose-600">
+                      محاولات خاطئة متكررة. يرجى الانتظار {securityStatus.remainingLockSeconds} ثانية.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={pin}
+                      maxLength={12}
+                      onChange={(e) => {
+                        setPin(e.target.value);
+                        setPinError('');
+                      }}
+                      placeholder="أدخل رمز الدخول..."
+                      autoFocus
+                      className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      دخول
+                    </button>
+                  </div>
+                )}
+
                 {pinError && (
                   <div className="text-[11px] text-rose-600 font-bold flex items-center justify-center gap-1">
-                    <AlertCircle className="w-3 h-3" />
-                    <span>رمز PIN غير صحيح</span>
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{pinError}</span>
                   </div>
                 )}
               </form>

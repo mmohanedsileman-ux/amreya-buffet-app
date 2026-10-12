@@ -20,6 +20,7 @@ import {
 import { Customer } from '../types';
 import { INITIAL_CUSTOMERS } from '../data/initialData';
 import { AmreyahBuffetLogo } from './AmreyahBuffetLogo';
+import { getAdminSecurityStatus, recordFailedPinAttempt, resetFailedPinAttempts } from '../utils/security';
 import { 
   getNextCustomerCode, 
   getCustomerBadgeCode, 
@@ -54,17 +55,40 @@ export const WelcomeOrderPortal: React.FC<WelcomeOrderPortalProps> = ({
   // Matched employee state
   const [matchedEmployee, setMatchedEmployee] = useState<Customer | null>(null);
 
-  // Admin / Cashier PIN login state (PIN: 11803)
+  // Admin / Cashier PIN login state (PIN: 11803) with brute-force lockout protection
   const [showAdminPrompt, setShowAdminPrompt] = useState(false);
   const [adminPin, setAdminPin] = useState('');
-  const [adminPinError, setAdminPinError] = useState(false);
+  const [adminPinError, setAdminPinError] = useState('');
+  const [adminSecurityStatus, setAdminSecurityStatus] = useState(getAdminSecurityStatus());
+
+  useEffect(() => {
+    if (!adminSecurityStatus.isLocked) return;
+    const interval = setInterval(() => {
+      const status = getAdminSecurityStatus();
+      setAdminSecurityStatus(status);
+      if (!status.isLocked) clearInterval(interval);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [adminSecurityStatus.isLocked]);
 
   const handleAdminPinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (['11803', '14043', '1234', '1148'].includes(adminPin.trim())) {
+    if (adminSecurityStatus.isLocked) {
+      setAdminPinError(`تم قفل محاولات الدخول مؤقتاً. يرجى الانتظار ${adminSecurityStatus.remainingLockSeconds} ثانية.`);
+      return;
+    }
+    const cleanPin = adminPin.trim();
+    if (['11803', '14043', '1234', '1148'].includes(cleanPin)) {
+      resetFailedPinAttempts();
       onSwitchToAdmin();
     } else {
-      setAdminPinError(true);
+      const res = recordFailedPinAttempt();
+      setAdminSecurityStatus(getAdminSecurityStatus());
+      if (res.isLocked) {
+        setAdminPinError('تم حظر المحاولات لمدة 5 دقائق بعد استنفاد محاولات الدخول الخاطئة.');
+      } else {
+        setAdminPinError(`رمز PIN غير صحيح. متبقي ${res.remainingAttempts} محاولات قبل القفل المؤقت.`);
+      }
     }
   };
 
@@ -368,41 +392,51 @@ export const WelcomeOrderPortal: React.FC<WelcomeOrderPortalProps> = ({
                 ) : (
                   <form onSubmit={handleAdminPinSubmit} className="bg-[#f5f1eb] p-3.5 rounded-2xl border border-[#ded5c7] space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold text-[#26201b]">
-                      <span>رمز الإدارة والكاشير:</span>
+                      <span className="flex items-center gap-1">
+                        <Lock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>رمز الإدارة والكاشير:</span>
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
                           setShowAdminPrompt(false);
                           setAdminPin('');
-                          setAdminPinError(false);
+                          setAdminPinError('');
                         }}
                         className="text-gray-400 hover:text-gray-700 text-[11px]"
                       >
                         إلغاء
                       </button>
                     </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={adminPin}
-                        onChange={(e) => {
-                          setAdminPin(e.target.value);
-                          setAdminPinError(false);
-                        }}
-                        placeholder="أدخل رمز الدخول..."
-                        autoFocus
-                        className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-                      >
-                        دخول
-                      </button>
-                    </div>
+                    {adminSecurityStatus.isLocked ? (
+                      <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] font-bold text-center">
+                        🔒 تم قفل المحاولات مؤقتاً ({adminSecurityStatus.remainingLockSeconds} ثانية متبقية)
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          value={adminPin}
+                          maxLength={12}
+                          onChange={(e) => {
+                            setAdminPin(e.target.value);
+                            setAdminPinError('');
+                          }}
+                          placeholder="أدخل رمز الدخول..."
+                          autoFocus
+                          className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
+                        />
+                        <button
+                          type="submit"
+                          className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          دخول
+                        </button>
+                      </div>
+                    )}
                     {adminPinError && (
                       <div className="text-[11px] text-rose-600 font-bold text-center">
-                        رمز PIN غير صحيح
+                        {adminPinError}
                       </div>
                     )}
                   </form>
