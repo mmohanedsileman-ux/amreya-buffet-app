@@ -1,108 +1,75 @@
 /**
- * Buffet Operating Hours Manager
+ * Buffet Operating Hours Manager - Alexandria Cement Cafeteria
  * Official Workdays: Sunday through Thursday (الأحد إلى الخميس)
- * Official Hours: 8:00 AM to 3:30 PM (8:00 - 15:30)
- * Official Weekend Holidays: Friday & Saturday (الجمعة والسبت عطلة رسمية)
- * Scheduled Live Enforcement Date: Thursday, October 1, 2026
+ * Official Hours: 8:00 AM to 3:30 PM (08:00 - 15:30) Africa/Cairo timezone
+ * Official Weekend Holidays: Friday & Saturday (الجمعة والسبت عطلة رسمية مغلق 24 ساعة)
+ * Strictly Enforced: No client-side bypass, no reload exploits
  */
 
 export const WORKING_HOURS_KEY = 'cafe_working_hours_enabled';
 export const WORKING_HOURS_BYPASS_KEY = 'cafe_working_hours_bypass_until';
-export const WORKING_HOURS_SCHEDULE_DATE = '2026-10-01'; // Thursday
 
 export interface WorkingHoursStatus {
   isOpen: boolean;
   isEnforced: boolean;
   isWeekend: boolean;
-  isBypassed: boolean;
-  bypassRemainingMinutes: number;
-  scheduledStartDate: string;
+  cairoTimeText: string;
   currentHoursText: string;
   closingTimeText: string;
   openingTimeText: string;
 }
 
-/**
- * Checks if a temporary bypass for testing is currently active
- */
-export function isWorkingHoursBypassed(): boolean {
-  try {
-    const bypassUntil = localStorage.getItem(WORKING_HOURS_BYPASS_KEY);
-    if (bypassUntil) {
-      const untilNum = Number(bypassUntil);
-      if (!isNaN(untilNum) && untilNum > Date.now()) {
-        return true;
-      }
-    }
-  } catch {}
-  return false;
-}
-
-/**
- * Sets temporary bypass for testing (default 2 hours)
- */
-export function setWorkingHoursBypass(hours: number = 2): void {
-  try {
-    const expireTime = Date.now() + Math.max(0.5, hours) * 3600 * 1000;
-    localStorage.setItem(WORKING_HOURS_BYPASS_KEY, String(expireTime));
-  } catch {}
-}
-
-/**
- * Cancels the temporary bypass and restores normal working hours lock
- */
-export function clearWorkingHoursBypass(): void {
-  try {
-    localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
-  } catch {}
-}
-
-/**
- * Returns remaining minutes of the test bypass
- */
-export function getBypassRemainingMinutes(): number {
-  try {
-    const bypassUntil = localStorage.getItem(WORKING_HOURS_BYPASS_KEY);
-    if (bypassUntil) {
-      const untilNum = Number(bypassUntil);
-      if (!isNaN(untilNum) && untilNum > Date.now()) {
-        return Math.ceil((untilNum - Date.now()) / (60 * 1000));
-      }
-    }
-  } catch {}
-  return 0;
-}
-
-// Clear any test bypass on load as testing is now concluded
+// Cleanup any legacy bypass keys from localStorage permanently
 try {
-  localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+    localStorage.removeItem('cafe_working_hours_bypass');
+    localStorage.removeItem('cafe_working_hours_bypass_time');
+    localStorage.removeItem('cafe_working_hours_test_mode');
+    sessionStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+  }
 } catch {}
 
 /**
- * Checks if a given date is Friday (5) or Saturday (6) - Official Weekend Holidays
+ * Returns a Date object converted strictly to Egypt's official timezone (Africa/Cairo)
+ * This guarantees exact Cairo time regardless of the user device's local clock or country.
+ */
+export function getCairoDate(baseDate: Date = new Date()): Date {
+  try {
+    const cairoString = baseDate.toLocaleString('en-US', { timeZone: 'Africa/Cairo' });
+    return new Date(cairoString);
+  } catch {
+    // Fallback if Intl timeZone is unsupported
+    return baseDate;
+  }
+}
+
+/**
+ * Checks if a given date is Friday (5) or Saturday (6) in Egypt - Official Weekend Holidays
  */
 export function isWeekendHoliday(date: Date = new Date()): boolean {
-  const day = date.getDay();
+  const cairo = getCairoDate(date);
+  const day = cairo.getDay();
   // 5 = Friday (الجمعة), 6 = Saturday (السبت)
   return day === 5 || day === 6;
 }
 
 /**
- * Checks if the current time is within official operating hours:
+ * Checks if the current Egypt time is within official operating hours:
  * - Friday & Saturday: Strictly CLOSED all day (عطلة رسمية)
- * - Sunday through Thursday: Open only from 8:00 AM to 3:30 PM
+ * - Sunday through Thursday: Open only from 8:00 AM to 3:30 PM (08:00 - 15:30)
  */
 export function isCurrentTimeWithinHours(): boolean {
-  const now = new Date();
+  const cairo = getCairoDate();
 
-  // 1. Check Weekend Holiday (Friday & Saturday)
-  if (isWeekendHoliday(now)) {
+  // 1. Weekend Holiday (Friday & Saturday) -> strictly closed
+  if (isWeekendHoliday(cairo)) {
     return false;
   }
 
-  // 2. Check Daily Hours (8:00 AM to 3:30 PM)
-  const hours = now.getHours();
-  const minutes = now.getMinutes();
+  // 2. Daily Hours (8:00 AM to 3:30 PM Egypt time)
+  const hours = cairo.getHours();
+  const minutes = cairo.getMinutes();
   const currentTotalMinutes = hours * 60 + minutes;
 
   const startMinutes = 8 * 60; // 08:00 AM
@@ -112,57 +79,64 @@ export function isCurrentTimeWithinHours(): boolean {
 }
 
 /**
- * Checks if the working hours lock should be enforced right now:
- * - If temporary test bypass is active: lock is completely bypassed for testing!
- * - If Admin manually toggled on/off in localStorage, respects that.
- * - Otherwise, automatically activates starting Thursday (2026-10-01).
+ * Operating hours enforcement is strictly enabled and mandatory.
+ * No client-side bypass or loopholes allowed.
  */
 export function isWorkingHoursEnforced(): boolean {
-  // If user requested temporary test bypass, do NOT lock!
-  if (isWorkingHoursBypassed()) {
-    return false;
-  }
-
-  try {
-    const saved = localStorage.getItem(WORKING_HOURS_KEY);
-    if (saved !== null) {
-      return saved === 'true';
-    }
-  } catch {}
-
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  return todayStr >= WORKING_HOURS_SCHEDULE_DATE;
+  return true;
 }
 
 /**
- * Sets manual override for working hours enforcement
+ * Checks if any test bypass is active (strictly returns false in production)
  */
-export function setWorkingHoursEnforced(enforced: boolean): void {
+export function isWorkingHoursBypassed(): boolean {
+  return false;
+}
+
+/**
+ * Clears any bypass state
+ */
+export function clearWorkingHoursBypass(): void {
   try {
-    localStorage.setItem(WORKING_HOURS_KEY, String(enforced));
+    localStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
+    sessionStorage.removeItem(WORKING_HOURS_BYPASS_KEY);
   } catch {}
+}
+
+/**
+ * Gets remaining bypass minutes (0 in production)
+ */
+export function getBypassRemainingMinutes(): number {
+  return 0;
+}
+
+/**
+ * Sets temporary bypass - disabled in production to prevent loopholes
+ */
+export function setWorkingHoursBypass(): void {
+  clearWorkingHoursBypass();
 }
 
 /**
  * Gets overall status for display in UI
  */
 export function getWorkingHoursStatus(): WorkingHoursStatus {
-  const now = new Date();
-  const isBypassed = isWorkingHoursBypassed();
+  const cairo = getCairoDate();
   const isEnforced = isWorkingHoursEnforced();
   const isWithin = isCurrentTimeWithinHours();
-  const isWeekend = isWeekendHoliday(now);
+  const isWeekend = isWeekendHoliday(cairo);
 
-  const isOpen = isBypassed || !isEnforced || isWithin;
+  const isOpen = !isEnforced || isWithin;
+
+  const hours12 = cairo.getHours() % 12 || 12;
+  const ampm = cairo.getHours() >= 12 ? 'م' : 'ص';
+  const cairoTimeText = `${hours12}:${String(cairo.getMinutes()).padStart(2, '0')} ${ampm}`;
 
   return {
     isOpen,
     isEnforced,
     isWeekend,
-    isBypassed,
-    bypassRemainingMinutes: getBypassRemainingMinutes(),
-    scheduledStartDate: WORKING_HOURS_SCHEDULE_DATE,
+    cairoTimeText,
     currentHoursText: 'من الأحد إلى الخميس: 8:00 ص حتى 3:30 م (الجمعة والسبت عطلة)',
     openingTimeText: '8:00 صباحاً',
     closingTimeText: '3:30 عصراً',

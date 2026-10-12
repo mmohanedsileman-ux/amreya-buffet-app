@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { CartItem, Customer, PaymentMethod, Order } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { isCurrentTimeWithinHours } from '../utils/workingHours';
 import { extractCleanEmployeeName, extractEmployeeDigits } from '../services/googleSheets';
 import { INITIAL_CUSTOMERS } from '../data/initialData';
 
@@ -153,6 +154,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const remainingOnDebt = totalAmount - calculatedPaidAmount();
 
   const handleCreateOrder = () => {
+    if (!isAdminMode && !isCurrentTimeWithinHours()) {
+      setOrderError('عفواً، لا يمكن إتمام الطلب خارج مواعيد العمل الرسمية للبوفية (من 8:00 ص حتى 3:30 م).');
+      return;
+    }
+
     const now = Date.now();
     if (now - lastCheckoutClickRef.current < 2500) {
       return;
@@ -601,26 +607,33 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               )}
 
               {/* Submit Order Button */}
-              <button
-                id="checkout-confirm-btn"
-                type="button"
-                onClick={handleCreateOrder}
-                disabled={isSubmitting || justSubmitted || cart.length === 0}
-                className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-white ${
-                  isHospitalityAccount 
-                    ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-400/50' 
-                    : 'bg-[#26201b] hover:bg-[#c48956]'
-                }`}
-              >
-                <span>
-                  {isSubmitting || justSubmitted
-                    ? 'جاري تأكيد وتسجيل الطلب... ⏳' 
-                    : isHospitalityAccount
-                      ? 'إتمام طلب الضيافة (مجاني 0 ج.م) ☕'
-                      : `إتمام الطلب (${formatCurrency(totalAmount)})`}
-                </span>
-                <ArrowRight className="w-4 h-4 rotate-180" />
-              </button>
+              {(!isAdminMode && !isCurrentTimeWithinHours()) ? (
+                <div className="w-full py-3.5 px-4 bg-amber-50 border border-amber-300 rounded-xl text-center text-xs font-black text-amber-950 flex items-center justify-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>عفواً، البوفية مغلق حالياً (خارج مواعيد العمل الرسمية من 8:00 ص حتى 3:30 م)</span>
+                </div>
+              ) : (
+                <button
+                  id="checkout-confirm-btn"
+                  type="button"
+                  onClick={handleCreateOrder}
+                  disabled={isSubmitting || justSubmitted || cart.length === 0}
+                  className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-black text-sm transition-all cursor-pointer shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-white ${
+                    isHospitalityAccount 
+                      ? 'bg-purple-700 hover:bg-purple-800 ring-2 ring-purple-400/50' 
+                      : 'bg-[#26201b] hover:bg-[#c48956]'
+                  }`}
+                >
+                  <span>
+                    {isSubmitting || justSubmitted
+                      ? 'جاري تأكيد وتسجيل الطلب... ⏳' 
+                      : isHospitalityAccount
+                        ? 'إتمام طلب الضيافة (مجاني 0 ج.م) ☕'
+                        : `إتمام الطلب (${formatCurrency(totalAmount)})`}
+                  </span>
+                  <ArrowRight className="w-4 h-4 rotate-180" />
+                </button>
+              )}
             </div>
           )}
         </div>

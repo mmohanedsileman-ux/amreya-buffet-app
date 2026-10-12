@@ -238,6 +238,22 @@ export default function App() {
     return saved !== null ? saved === 'true' : true;
   });
 
+  // Periodic live check for working hours to immediately close the cafeteria when 3:30 PM arrives
+  const [, setWorkingHoursTick] = useState<number>(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setWorkingHoursTick(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // When outside working hours, automatically close cart drawer if not in admin mode
+  useEffect(() => {
+    if (!isAdminMode && !isCurrentTimeWithinHours()) {
+      setIsCartOpen(false);
+    }
+  }, [isAdminMode]);
+
   // Startup: clean any legacy duplicate orders permanently from localStorage & state
   useEffect(() => {
     setOrders(prev => {
@@ -910,6 +926,11 @@ export default function App() {
     item: MenuItem, 
     options?: { sugar?: string; size?: string; sizePriceDelta?: number; notes?: string }
   ) => {
+    if (!isAdminMode && !isCurrentTimeWithinHours()) {
+      alert('عفواً، لا يمكن إضافة طلبات خارج مواعيد العمل الرسمية للبوفية (من 8:00 ص حتى 3:30 م).');
+      return;
+    }
+
     const sizeDelta = options?.sizePriceDelta || 0;
     const unitPrice = item.price + sizeDelta;
     const cartItemId = `${item.id}-${options?.sugar || 'default'}-${options?.size || 'regular'}-${options?.notes || ''}`;
@@ -991,6 +1012,12 @@ export default function App() {
 
   // Checkout handling
   const handleCheckoutComplete = (newOrder: Order) => {
+    // Strict guard: No orders allowed outside official working hours unless in Admin mode
+    if (!isAdminMode && !isCurrentTimeWithinHours()) {
+      alert('عفواً، لا يمكن إتمام الطلب خارج مواعيد العمل الرسمية للبوفية.');
+      return;
+    }
+
     // 0. Deduplication guard against rapid multi-calls
     if (orders.some(o => o.id === newOrder.id)) {
       return;
