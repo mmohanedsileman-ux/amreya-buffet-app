@@ -13,7 +13,9 @@ import {
   ChevronDown,
   Gift,
   PartyPopper,
-  Receipt
+  Receipt,
+  AlertCircle,
+  Ban
 } from 'lucide-react';
 import { MenuItem, ProductCategory } from '../types';
 import { formatCurrency } from '../utils/formatters';
@@ -38,6 +40,7 @@ interface CafeMenuProps {
   onSwitchCustomer?: () => void;
   onOpenDebts?: () => void;
   isEmployee?: boolean;
+  onSwitchToAdmin?: () => void;
 }
 
 const CATEGORIES: { key: ProductCategory | 'all'; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -58,6 +61,7 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
   onSwitchCustomer,
   onOpenDebts,
   isEmployee = false,
+  onSwitchToAdmin,
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<ProductCategory | 'all'>('all');
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
@@ -85,6 +89,7 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
 
   const handleQuickAdd = (item: MenuItem, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!item.available) return;
     if (item.allowSugarOptions || item.allowSizeOptions) {
       // open options popup for fine-tuned taste
       setActiveItemWithOptions(item);
@@ -143,32 +148,56 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
             </div>
           </div>
 
-          {/* Employee Debt Status Badge */}
-          {customerGreeting.isEmployee && (
-            <div className="w-full sm:w-auto flex items-center justify-end">
-              {customerGreeting.remainingDebt && customerGreeting.remainingDebt > 0 ? (
-                <button
-                  type="button"
-                  onClick={onOpenDebts}
-                  className="w-full sm:w-auto inline-flex items-center justify-between sm:justify-start gap-2 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold text-xs transition-all shadow-xs cursor-pointer group"
-                  title="اضغط لعرض تفاصيل حسابك وفواتيرك المعلقة"
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Receipt className="w-4 h-4 text-rose-600" />
-                    <span>المديونية الحالية:</span>
+          {/* Actions: Debt badge, Switch Account, and Cashier Mode */}
+          <div className="w-full sm:w-auto flex flex-wrap items-center justify-between sm:justify-end gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#f0eae1]">
+            {/* Employee Debt Status Badge */}
+            {customerGreeting.isEmployee && (
+              <div>
+                {customerGreeting.remainingDebt && customerGreeting.remainingDebt > 0 ? (
+                  <button
+                    type="button"
+                    onClick={onOpenDebts}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 font-bold text-xs transition-all shadow-xs cursor-pointer group"
+                    title="اضغط لعرض تفاصيل حسابك وفواتيرك المعلقة"
+                  >
+                    <Receipt className="w-3.5 h-3.5 text-rose-600" />
+                    <span>المديونية:</span>
                     <span className="font-black text-rose-700 bg-white px-2 py-0.5 rounded-lg border border-rose-200 shadow-inner">
                       {formatCurrency(customerGreeting.remainingDebt)}
                     </span>
+                  </button>
+                ) : (
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs">
+                    <span>الحساب مسدد بالكامل ✅</span>
                   </div>
-                  <span className="text-[10px] text-rose-600 group-hover:underline mr-1">تفاصيل الحساب ←</span>
-                </button>
-              ) : (
-                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-xs">
-                  <span>الحساب مسدد بالكامل ✅</span>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+
+            {/* Switch / Logout Button */}
+            {onSwitchCustomer && (
+              <button
+                type="button"
+                onClick={onSwitchCustomer}
+                className="px-3 py-1.5 bg-[#f5f1eb] hover:bg-[#eae3d8] text-[#5c5043] hover:text-[#26201b] rounded-xl text-xs font-bold transition-all border border-[#ded5c8] flex items-center gap-1 cursor-pointer"
+                title="تسجيل الخروج والعودة لشاشة الترحيب الرئيسية"
+              >
+                <span>🚪 خروج / تبديل الحساب</span>
+              </button>
+            )}
+
+            {/* Switch to Admin / Cashier Mode */}
+            {onSwitchToAdmin && (
+              <button
+                type="button"
+                onClick={onSwitchToAdmin}
+                className="px-3 py-1.5 bg-[#172338] hover:bg-[#243553] text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                title="الانتقال إلى لوحة الكاشير والإدارة العامة"
+              >
+                <span>🔑 لوحة الكاشير</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -224,10 +253,12 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredItems.map(item => {
             const isAddedJustNow = addedAnimationId === item.id;
+            const isAvailable = item.available !== false;
             return (
               <div
                 key={item.id}
                 onClick={() => {
+                  if (!isAvailable) return;
                   if (item.allowSugarOptions || item.allowSizeOptions) {
                     setActiveItemWithOptions(item);
                     setSelectedSugar('مظبوط');
@@ -238,21 +269,31 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
                     triggerAddedFeedback(item.id);
                   }
                 }}
-                className={`group relative bg-white rounded-2xl border transition-all duration-200 p-4 flex flex-col justify-between cursor-pointer hover:shadow-md ${
-                  isAddedJustNow
-                    ? 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20'
-                    : 'border-[#e8e2d9] hover:border-[#c48956]'
+                className={`group relative rounded-2xl border transition-all duration-200 p-4 flex flex-col justify-between ${
+                  !isAvailable
+                    ? 'bg-gray-50/80 border-gray-200 opacity-60 grayscale-[40%] cursor-not-allowed select-none shadow-none'
+                    : isAddedJustNow
+                    ? 'bg-white border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50/20 cursor-pointer hover:shadow-md'
+                    : 'bg-white border-[#e8e2d9] hover:border-[#c48956] cursor-pointer hover:shadow-md'
                 }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {item.code && (
-                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-900 border border-amber-200">
+                        <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                          !isAvailable
+                            ? 'bg-gray-100 text-gray-500 border-gray-200'
+                            : 'bg-amber-50 text-amber-900 border-amber-200'
+                        }`}>
                           {item.code}
                         </span>
                       )}
-                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#f7f2ec] text-[#8c5b30]">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
+                        !isAvailable
+                          ? 'bg-gray-100 text-gray-500'
+                          : 'bg-[#f7f2ec] text-[#8c5b30]'
+                      }`}>
                         {item.category === 'food' && 'سندوتش'}
                         {item.category === 'special' && 'طبق بطاطس'}
                         {item.category === 'desserts' && 'شيبسي / سناكس'}
@@ -260,61 +301,83 @@ export const CafeMenu: React.FC<CafeMenuProps> = ({
                         {item.category === 'hot_drinks' && 'مشروب ساخن'}
                       </span>
                     </div>
-
-                    {item.popular && (
+                    {!isAvailable ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-black px-2.5 py-1 rounded-full bg-rose-100 text-rose-700 border border-rose-200 shadow-xs">
+                        <Ban className="w-3 h-3 text-rose-600" />
+                        غير متوفر حالياً
+                      </span>
+                    ) : item.popular ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                         <Flame className="w-3 h-3 text-amber-600 fill-amber-500" />
                         الأكثر طلباً
                       </span>
-                    )}
+                    ) : null}
                   </div>
-
-                  <h3 className="text-base font-black text-[#26201b] group-hover:text-[#915829] transition-colors leading-snug">
+                  <h3 className={`text-base font-black transition-colors leading-snug ${
+                    !isAvailable ? 'text-gray-500 line-through decoration-gray-400' : 'text-[#26201b] group-hover:text-[#915829]'
+                  }`}>
                     {item.name}
                   </h3>
-
-                  <p className="text-xs text-[#7a7063] mt-1 line-clamp-2 leading-relaxed">
+                  <p className={`text-xs mt-1 line-clamp-2 leading-relaxed ${
+                    !isAvailable ? 'text-gray-400' : 'text-[#7a7063]'
+                  }`}>
                     {item.description}
                   </p>
-
-                  {/* Customization hints */}
-                  {(item.allowSugarOptions || item.allowSizeOptions) && (
+                  {/* Availability note or Customization hints */}
+                  {!isAvailable ? (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-rose-700 font-bold bg-rose-50 px-2 py-1 rounded-lg border border-rose-200/60">
+                      <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                      <span>نفد من المخزون / غير متوفر حالياً</span>
+                    </div>
+                  ) : (item.allowSugarOptions || item.allowSizeOptions) ? (
                     <div className="mt-2.5 flex items-center gap-1.5 text-[11px] text-[#915829] font-medium bg-[#fcf9f5] px-2 py-1 rounded-lg border border-[#eee7dd]">
                       <SlidersHorizontal className="w-3 h-3" />
                       <span>تخصيص السكر والحجم متوفر</span>
                     </div>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Price and Add button */}
                 <div className="mt-4 pt-3 border-t border-[#f0eae1] flex items-center justify-between">
                   <div>
                     <span className="text-xs text-[#8c8072]">السعر:</span>
-                    <div className="text-lg font-black text-[#26201b]">
+                    <div className={`text-lg font-black ${!isAvailable ? 'text-gray-400' : 'text-[#26201b]'}`}>
                       {formatCurrency(item.price)}
                     </div>
                   </div>
-
-                  <button
-                    onClick={(e) => handleQuickAdd(item, e)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
-                      isAddedJustNow
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-[#26201b] group-hover:bg-[#c48956] text-white'
-                    }`}
-                  >
-                    {isAddedJustNow ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        <span>تمت الإضافة!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>إضافة للطلب</span>
-                      </>
-                    )}
-                  </button>
+                  {!isAvailable ? (
+                    <button
+                      type="button"
+                      disabled
+                      aria-disabled="true"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-gray-200 text-gray-500 cursor-not-allowed border border-gray-300 shadow-none"
+                    >
+                      <Ban className="w-3.5 h-3.5 text-gray-400" />
+                      <span>غير متوفر</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => handleQuickAdd(item, e)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs ${
+                        isAddedJustNow
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-[#26201b] group-hover:bg-[#c48956] text-white'
+                      }`}
+                    >
+                      {isAddedJustNow ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>تمت الإضافة!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>إضافة للطلب</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             );

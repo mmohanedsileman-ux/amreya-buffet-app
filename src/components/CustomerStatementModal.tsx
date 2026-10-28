@@ -201,14 +201,30 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 sm:p-5 border-t border-[#f0eae1] flex items-center justify-between gap-3 bg-[#faf8f5]">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#eee6dc] text-[#4a4237] border border-[#d9d1c7] rounded-xl text-xs font-bold cursor-pointer transition-all"
-          >
-            <Printer className="w-4 h-4" />
-            <span>طباعة كشف الحساب</span>
-          </button>
+        <div className="p-4 sm:p-5 border-t border-[#f0eae1] flex flex-wrap items-center justify-between gap-3 bg-[#faf8f5]">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#eee6dc] text-[#4a4237] border border-[#d9d1c7] rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
+            >
+              <Printer className="w-4 h-4" />
+              <span>طباعة كشف الحساب</span>
+            </button>
+
+            {customer.remainingDebt > 0 && (
+              <a
+                href={`https://wa.me/${(customer.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(
+                  `مرحباً أستاذ ${customer.name} (كود: ${customer.code})،\nنود إحاطتكم علماً بأن رصيد مديونيتكم المعلق لدى كافيتريا وبوفيه أسمنت العامرية هو: ${customer.remainingDebt} ج.م.\nيمكنكم السداد نقداً للكاشير أو عبر إنستاباي / فودافون كاش.\nشاكرين لتعاونكم الدائم!`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
+                title="إرسال تذكير بالمديونية على واتساب"
+              >
+                <span>واتساب 💬</span>
+              </a>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             {customer.remainingDebt > 0 && (

@@ -152,22 +152,23 @@ export const CustomerPortalView: React.FC<CustomerPortalViewProps> = ({
               </div>
             </div>
 
-            {/* Action to Pay Debt */}
-            <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 min-w-[220px]">
-              <button
-                id="customer-settle-debt-btn"
-                onClick={onOpenSettleModal}
-                className="w-full py-3.5 px-6 bg-gradient-to-r from-emerald-600 via-emerald-700 to-emerald-800 hover:from-emerald-700 hover:to-emerald-900 text-white rounded-2xl font-black text-sm transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 cursor-pointer transform active:scale-98"
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>سداد مديونيتي الآن ({formatCurrency(liveDebt)})</span>
-              </button>
+            {/* Direct Action & Cashier Settle Notice (No self-settle button) */}
+            <div className="flex flex-col gap-2.5 min-w-[220px]">
+              <div className="bg-white/90 border border-amber-300/80 p-3.5 rounded-2xl text-xs space-y-1 shadow-2xs">
+                <div className="flex items-center gap-1.5 font-black text-amber-950">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <span>طريقة السداد:</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-[#6b584b]">
+                  يتم السداد مباشرة لدى <strong>كاشير البوفيه</strong> (نقداً / إنستاباي / فودافون كاش)، ويتم إسقاط وتصفير المديونية من حسابك تلقائياً فور إثبات الدفع.
+                </p>
+              </div>
 
               <button
                 onClick={onGoToMenu}
-                className="w-full py-2.5 px-4 bg-white hover:bg-[#faf8f5] text-[#26201b] border border-[#dcd4c8] rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-3 px-4 bg-[#26201b] hover:bg-[#c48956] text-white rounded-2xl font-black text-xs transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
               >
-                <ShoppingBag className="w-3.5 h-3.5 text-[#c48956]" />
+                <ShoppingBag className="w-4 h-4 text-amber-300" />
                 <span>طلب أوردر جديد من المنيو</span>
               </button>
             </div>
@@ -371,7 +372,7 @@ export const CustomerPortalView: React.FC<CustomerPortalViewProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-[#6b584b]">
-                  يوجد رصيد مديونية مسجل باسمك في شيت الحسابات (سجل_الطلبات) بقيمة <strong>{formatCurrency(liveDebt)}</strong>. يمكنك السداد للكاشير أو الضغط على زر السداد بالأعلى لتسوية الحساب.
+                  يوجد رصيد مديونية مسجل باسمك في شيت الحسابات بقيمة <strong>{formatCurrency(liveDebt)}</strong>. يرجى التوجه لكاشير البوفيه لتسوية الحساب وسداد المبلغ، وسيتم تحديث رصيدك تلقائياً.
                 </p>
               </div>
             )}

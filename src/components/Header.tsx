@@ -10,11 +10,17 @@ import {
   User, 
   PlusCircle,
   Sparkles,
-  Receipt
+  Receipt,
+  Volume2,
+  VolumeX,
+  Coins,
+  Lock,
+  LogOut
 } from 'lucide-react';
 import { CartItem } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { AmreyahBuffetLogo } from './AmreyahBuffetLogo';
+import { sounds } from '../utils/soundEffects';
 
 interface HeaderProps {
   activeTab: 'menu' | 'debts' | 'orders';
@@ -25,6 +31,7 @@ interface HeaderProps {
   onOpenAddCustomer: () => void;
   onOpenSheetSync?: () => void;
   onOpenLuckyWheel: () => void;
+  onOpenShiftSummary?: () => void;
   totalDebt: number;
   activeCustomer: any;
   onSwitchCustomer: () => void;
@@ -45,6 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAddCustomer,
   onOpenSheetSync,
   onOpenLuckyWheel,
+  onOpenShiftSummary,
   totalDebt,
   activeCustomer,
   onSwitchCustomer,
@@ -56,6 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
   isEmployee = false,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => sounds.getMuted());
   const menuRef = useRef<HTMLDivElement>(null);
 
   const totalCartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -142,6 +151,16 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Sound Mute/Unmute Toggle Button */}
+          <button
+            type="button"
+            onClick={() => setIsMuted(sounds.toggleMute())}
+            className="h-8.5 w-8.5 flex items-center justify-center rounded-lg bg-[#2b2520] hover:bg-[#3a322b] text-[#d8cfc4] hover:text-white border border-[#423931] transition-all cursor-pointer"
+            title={isMuted ? 'تشغيل الأصوات التفاعلية' : 'كتم الأصوات'}
+          >
+            {isMuted ? <VolumeX className="w-3.5 h-3.5 text-[#8c8072]" /> : <Volume2 className="w-3.5 h-3.5 text-amber-400" />}
+          </button>
+
           {/* Cart button */}
           <button
             id="header-cart-toggle-btn"
@@ -218,6 +237,23 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>{isAdminMode ? 'سجل الطلبات العام (الإدارة)' : 'سجل طلباتي السابقة'}</span>
                 </button>
 
+                {/* Shift Summary Button - Cashier & Admin Only */}
+                {isAdminMode && onOpenShiftSummary && (
+                  <>
+                    <div className="h-px bg-[#3a322b] my-1" />
+                    <button
+                      onClick={() => {
+                        onOpenShiftSummary();
+                        setIsMenuOpen(false);
+                      }}
+                      className="w-full text-right px-3.5 py-2 flex items-center gap-2.5 text-emerald-400 hover:bg-[#322c26] transition-colors cursor-pointer font-bold"
+                    >
+                      <Coins className="w-3.5 h-3.5" />
+                      <span>تقرير الوردية والكاشير 📊</span>
+                    </button>
+                  </>
+                )}
+
                 {/* Lucky wheel only for employees */}
                 {isEmployee && (
                   <>
@@ -245,6 +281,36 @@ export const Header: React.FC<HeaderProps> = ({
                   >
                     <User className="w-3.5 h-3.5" />
                     <span>+ إضافة حساب عميل جديد</span>
+                  </button>
+                )}
+
+                <div className="h-px bg-[#3a322b] my-1" />
+
+                {/* Switch to Admin Mode (PIN) */}
+                {!isAdminMode && onToggleAdminMode && (
+                  <button
+                    onClick={() => {
+                      onToggleAdminMode();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-right px-3.5 py-2 flex items-center gap-2.5 text-amber-300 hover:bg-[#322c26] transition-colors cursor-pointer font-bold"
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>🔑 وضع الكاشير والإدارة (PIN)</span>
+                  </button>
+                )}
+
+                {/* Exit / Switch Account */}
+                {activeCustomer && (
+                  <button
+                    onClick={() => {
+                      onSwitchCustomer();
+                      setIsMenuOpen(false);
+                    }}
+                    className="w-full text-right px-3.5 py-2 flex items-center gap-2.5 text-rose-300 hover:bg-[#322c26] transition-colors cursor-pointer font-bold"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>🚪 تسجيل الخروج / تبديل الحساب</span>
                   </button>
                 )}
               </div>

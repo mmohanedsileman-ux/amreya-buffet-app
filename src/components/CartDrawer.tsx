@@ -39,6 +39,7 @@ export const isGuestOrExternalCustomer = (customer?: Customer | null): boolean =
   if (customer.category === 'عميل خارجي') return true;
   if (customer.code === 'GUEST' || customer.id?.startsWith('CUST-GUEST')) return true;
   if (customer.name?.includes('عميل خارجي') || customer.name?.includes('زائر خارجي')) return true;
+  if (customer.code === '1000' || customer.category === 'ضيوف وإدارة' || customer.name?.includes('ضيوف')) return true;
   return false;
 };
 
@@ -124,13 +125,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   }, [activeCustomer]);
 
   // Selected customer for debt order:
-  const selectedDebtCustomer = customers.find(c => c.id === selectedCustomerId) || eligibleDebtCustomers[0];
+  // If not admin, STRICTLY lock to the active logged-in employee (never reveal or charge anyone else)
+  const selectedDebtCustomer = (!isAdminMode && effectiveActiveCustomer && !isGuestOrExternalCustomer(effectiveActiveCustomer))
+    ? effectiveActiveCustomer
+    : (customers.find(c => c.id === selectedCustomerId) || eligibleDebtCustomers[0]);
   const selectedCustomer = selectedDebtCustomer;
 
-  // Detect if current order is for Hospitality account (Code 1000 or category 'ضيوف وإدارة' or name contains 'ضيوف')
+  // Detect if current order is explicitly for Hospitality account:
+  // ONLY if the active user account explicitly has code 1000, OR in Admin Mode if the admin explicitly chose the hospitality account
   const isHospitalityAccount = Boolean(
-    (activeCustomer && (activeCustomer.code === '1000' || activeCustomer.category === 'ضيوف وإدارة' || activeCustomer.name?.includes('ضيوف'))) ||
-    (isAdminMode && selectedCustomer && (selectedCustomer.code === '1000' || selectedCustomer.category === 'ضيوف وإدارة' || selectedCustomer.name?.includes('ضيوف')))
+    (!isAdminMode && activeCustomer && (activeCustomer.code === '1000' || activeCustomer.category === 'ضيوف وإدارة')) ||
+    (isAdminMode && selectedCustomer && (selectedCustomer.code === '1000' || selectedCustomer.category === 'ضيوف وإدارة'))
   );
 
   const subtotal = cart.reduce((sum, item) => sum + item.itemTotal, 0);

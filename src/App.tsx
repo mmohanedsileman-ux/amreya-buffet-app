@@ -14,6 +14,8 @@ import { WelcomeOrderPortal } from './components/WelcomeOrderPortal';
 import { CustomerPortalView } from './components/CustomerPortalView';
 import { CustomerSettleModal } from './components/CustomerSettleModal';
 import { ClosedHoursNotice } from './components/ClosedHoursNotice';
+import { ShiftSummaryModal } from './components/ShiftSummaryModal';
+import { sounds } from './utils/soundEffects';
 import { 
   isWorkingHoursEnforced, 
   isCurrentTimeWithinHours
@@ -33,7 +35,7 @@ import {
   INITIAL_TRANSACTIONS 
 } from './data/initialData';
 import { calculateSheetKPIs, formatCurrency } from './utils/formatters';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Lock, ShieldCheck, KeyRound, X, AlertCircle } from 'lucide-react';
 import { 
   initAuth, 
   googleSignIn, 
@@ -82,14 +84,16 @@ import {
   clearOutboxQueue
 } from './services/syncQueue';
 
-// One-time automatic refresh of debts data for updated debts sheet
-const OFFICIAL_LAUNCH_KEY = 'amreyah_buffet_launch_v2_debts';
+// One-time automatic refresh of debts data for updated debts sheet & stale session cleanup
+const OFFICIAL_LAUNCH_KEY = 'amreyah_buffet_launch_v3_reconciled';
 if (typeof window !== 'undefined' && localStorage.getItem(OFFICIAL_LAUNCH_KEY) !== 'ready') {
   try {
     localStorage.removeItem('cafe_orders_data');
     localStorage.removeItem('cafe_orders_data_v2');
     localStorage.removeItem('cafe_txns_data');
     localStorage.removeItem('cafe_customers_data');
+    localStorage.removeItem('cafe_active_customer_id');
+    sessionStorage.removeItem('cafe_active_customer_id');
     localStorage.setItem(OFFICIAL_LAUNCH_KEY, 'ready');
   } catch {}
 }
@@ -112,7 +116,6 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge with INITIAL_CUSTOMERS with INITIAL_CUSTOMERS authoritative sheet balances winning
           return mergeCustomersFromSheet(parsed, INITIAL_CUSTOMERS);
         }
       }
@@ -188,12 +191,12 @@ export default function App() {
       if (!c) return false;
       const strCId = String(c.id ?? '').trim();
       const strCCode = String(c.code ?? '').trim();
-
       if (strCId && strCId === strActiveId) return true;
-      if (strCCode && (strCCode === strActiveId || `CUST-${strCCode}` === strActiveId)) return true;
+      if (strCCode && (strCCode === strActiveId || ("CUST-" + strCCode) === strActiveId)) return true;
+      if (strActiveId.startsWith('CUST-GUEST') || strActiveId === 'GUEST') return false;
       const cDigits = extractEmployeeDigits(strCCode) || extractEmployeeDigits(c.name);
       const activeDigits = extractEmployeeDigits(strActiveId);
-      if (cDigits && activeDigits) {
+      if (cDigits && activeDigits && cDigits !== '1000' && activeDigits !== '1000') {
         if (cDigits === activeDigits) return true;
         const strippedC = cDigits.replace(/^0+/, '') || '0';
         const strippedActive = activeDigits.replace(/^0+/, '') || '0';
@@ -202,7 +205,8 @@ export default function App() {
       return false;
     };
 
-    return customers.find(matcher) || INITIAL_CUSTOMERS.find(matcher) || null;
+    const found = customers.find(matcher) || INITIAL_CUSTOMERS.find(matcher) || null;
+    return found;
   }, [customers, activeCustomerId]);
 
   // Only employees who log in with their code get access to the Fortune Wheel
@@ -223,6 +227,43 @@ export default function App() {
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
   const [statementCustomer, setStatementCustomer] = useState<Customer | null>(null);
   const [isLuckyWheelOpen, setIsLuckyWheelOpen] = useState(false);
+  const [isShiftSummaryOpen, setIsShiftSummaryOpen] = useState(false);
+  const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [adminPinError, setAdminPinError] = useState('');
+
+  const handleOpenAdminPrompt = () => {
+    setAdminPinInput('');
+    setAdminPinError('');
+    setIsAdminPinModalOpen(true);
+  };
+
+  const handleAdminPinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = adminPinInput.trim();
+    if (['11803', '14043', '1234', '1148'].includes(clean)) {
+      setIsAdminMode(true);
+      setActiveCustomerId(null);
+      setIsAdminPinModalOpen(false);
+      setAdminPinInput('');
+      setAdminPinError('');
+      setActiveTab('debts');
+    } else {
+      setAdminPinError('رمز PIN غير صحيح. يرجى إدخال رمز الكاشير الصحيح (11803).');
+    }
+  };
+
+  // URL query parameter detection: e.g. ?mode=admin or ?admin=true
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'admin' || params.get('admin') === 'true') {
+        setIsAdminMode(true);
+        setActiveCustomerId(null);
+        setActiveTab('debts');
+      }
+    }
+  }, []);
 
   // Google Sheets Integration State
   const [googleUser, setGoogleUser] = useState<any>(null);
@@ -441,9 +482,10 @@ export default function App() {
           const oNum = `ord-${order.orderNumber}`.toLowerCase();
           const numOnly = String(order.orderNumber).replace(/\D/g, '');
 
-          // An order is paid ONLY if its order ID has a checkmark [✓] in Column J in Google Sheets
+          // An order is paid if its order ID has a checkmark [✓] in Column J in Google Sheets
           const isOrderPaid = paidSet.has(oId) || paidSet.has(oNum) || (numOnly && paidSet.has(`ord-${numOnly}`));
 
+          // If a pending/credit order is marked paid [✓] in Column J in Google Sheets:
           if (isOrderPaid && order.remainingAmount > 0) {
             hasOrderChanges = true;
             return {
@@ -451,16 +493,9 @@ export default function App() {
               paidAmount: order.totalAmount,
               remainingAmount: 0,
             };
-          } else if (!isOrderPaid && order.remainingAmount === 0 && order.totalAmount > 0) {
-            // If Column J is NOT checked in Google Sheets, it is UNPAID / DEBT!
-            hasOrderChanges = true;
-            return {
-              ...order,
-              paidAmount: 0,
-              remainingAmount: order.totalAmount,
-              paymentMethod: 'debt_account' as PaymentMethod,
-            };
           }
+
+          // Important: NEVER convert an already-paid cash/instapay/vodafone order into debt!
           return order;
         });
 
@@ -482,40 +517,67 @@ export default function App() {
           }
 
           let hasCustomerChanges = baseList.length !== prevCustomers.length;
+          const matchedDebtKeys = new Set<string>();
+
           const nextCustomers = baseList.map(cust => {
             const cleanCustName = extractCleanEmployeeName(cust.name);
             const normCustName = normalizeArabicName(cleanCustName);
-            const custCode = cust.code ? String(cust.code).trim() : '';
-
-            // Priority 1: Match debt from res.customerDebts (Calculated directly from سجل_الطلبات)
-            let matchedDebtFromKey: number | null = null;
+            const custCode = cust.code ? String(cust.code).trim() : "";
             const custDigits = extractEmployeeDigits(cust.code) || extractEmployeeDigits(cust.name);
 
+            // Priority 1: Match debt from res.customerDebts (Strict matching by badge code or exact normalized name)
+            let totalMatchedDebtFromKey = 0;
+            let foundDebtKeyMatch = false;
+            let bestMatchDebt = 0;
+
             for (const [key, debtVal] of Object.entries(res.customerDebts)) {
+              const val = Number(debtVal) || 0;
+              if (val <= 0) continue;
+
               const keyDigits = extractEmployeeDigits(key);
+              let isMatch = false;
 
               // 1. If both records have employee codes, compare strictly by employee code!
               if (custDigits && keyDigits) {
                 const strippedCust = custDigits.replace(/^0+/, '') || '0';
                 const strippedKey = keyDigits.replace(/^0+/, '') || '0';
                 if (custDigits === keyDigits || strippedCust === strippedKey) {
-                  matchedDebtFromKey = Number(debtVal) || 0;
-                  break;
+                  isMatch = true;
                 }
-                // Different codes = different employees, skip!
-                continue;
+              } else if (!keyDigits && !custDigits) {
+                // 2. Strict exact normalized name match (without code suffix)
+                const cleanKey = extractCleanEmployeeName(key);
+                const normKey = normalizeArabicName(cleanKey);
+                const spacelessCust = normCustName.replace(/\s+/g, '');
+                const spacelessKey = normKey.replace(/\s+/g, '');
+                if (normKey && normCustName && (normKey === normCustName || spacelessKey === spacelessCust)) {
+                  isMatch = true;
+                }
+              } else if (!keyDigits && custDigits) {
+                // 3. Customer has code, but sheet key has only name (e.g. "نادر محمدالسيد")
+                const cleanKey = extractCleanEmployeeName(key);
+                const normKey = normalizeArabicName(cleanKey);
+                const spacelessCust = normCustName.replace(/\s+/g, '');
+                const spacelessKey = normKey.replace(/\s+/g, '');
+                if (normKey && normCustName && (normKey === normCustName || spacelessKey === spacelessCust)) {
+                  isMatch = true;
+                }
               }
 
-              // 2. If code is absent, match only by exact full normalized name (>= 8 chars)
-              const cleanKey = extractCleanEmployeeName(key);
-              const normKey = normalizeArabicName(cleanKey);
-              if (normKey && normCustName && normKey.length >= 8 && normKey === normCustName) {
-                matchedDebtFromKey = Number(debtVal) || 0;
-                break;
+              if (isMatch) {
+                foundDebtKeyMatch = true;
+                matchedDebtKeys.add(key);
+                // Instead of blindly summing duplicates of the same debt under different key variations,
+                // pick the authoritative latest value
+                bestMatchDebt = Math.max(bestMatchDebt, val);
               }
             }
 
-            // Sheet match from customers tab (strictly by code)
+            if (foundDebtKeyMatch) {
+              totalMatchedDebtFromKey = bestMatchDebt;
+            }
+
+            // Sheet match from customers tab (strictly by code or full name)
             const sheetMatch = res.customers?.find(sc => {
               const scDigits = extractEmployeeDigits(sc.code) || extractEmployeeDigits(sc.name);
               if (custDigits && scDigits) {
@@ -526,7 +588,7 @@ export default function App() {
               return (normCustName && normalizeArabicName(extractCleanEmployeeName(sc.name)) === normCustName);
             });
 
-            // Local orders belonging to this customer
+            // Local orders placed in current active session belonging to this customer
             const myOrders = nextOrders.filter((o: Order) => {
               if (o.customerId === cust.id) return true;
               if (custCode && o.customerName?.includes(custCode)) return true;
@@ -541,31 +603,21 @@ export default function App() {
             const liveOrdersRemainingDebt = myOrders.reduce((sum: number, o: Order) => sum + (o.remainingAmount || 0), 0);
 
             // Determine authoritative debt:
-            let newDebt = cust.remainingDebt;
-
-            if (sheetMatch && sheetMatch.remainingDebt !== undefined) {
-              // Direct from ورقة «أرصدة ومديونيات العملاء»:
-              newDebt = Number(sheetMatch.remainingDebt) || 0;
-            } else if (matchedDebtFromKey !== null) {
-              // Direct from سجل_الطلبات:
-              newDebt = matchedDebtFromKey;
-            } else if (zeroDebtCustomerNames.has(normCustName)) {
+            // Synchronized strictly from صفحة «المديونيات» في الشيت
+            let newDebt = 0;
+            if (foundDebtKeyMatch) {
+              newDebt = totalMatchedDebtFromKey;
+            } else {
+              // Not in صفحة المديونيات -> 0 debt (مسدد بالكامل)
               newDebt = 0;
-            } else if (myOrders.length > 0) {
-              newDebt = liveOrdersRemainingDebt;
             }
 
-            let baseTotalOrders = sheetMatch?.totalOrders !== undefined ? sheetMatch.totalOrders : cust.totalOrders;
-            let baseTotalPaid = sheetMatch?.totalPaid !== undefined ? sheetMatch.totalPaid : cust.totalPaid;
-
-            if (!sheetMatch) {
-              if (newDebt > 0) {
-                baseTotalOrders = Math.max(cust.totalOrders, newDebt + (cust.totalPaid || 0));
-                baseTotalPaid = Math.max(0, baseTotalOrders - newDebt);
-              } else if (newDebt === 0) {
-                baseTotalPaid = Math.max(baseTotalPaid, baseTotalOrders);
-              }
-            }
+            let baseTotalOrders = sheetMatch?.totalOrders !== undefined && sheetMatch.totalOrders > 0
+              ? sheetMatch.totalOrders 
+              : Math.max(cust.totalOrders || 0, newDebt + (cust.totalPaid || 0));
+            let baseTotalPaid = sheetMatch?.totalPaid !== undefined && sheetMatch.totalPaid > 0
+              ? sheetMatch.totalPaid 
+              : Math.max(0, baseTotalOrders - newDebt);
 
             if (newDebt === 0) {
               // Clear any pending orders for settled customers
@@ -595,6 +647,30 @@ export default function App() {
             return cust;
           });
 
+          // Register any debtor from res.customerDebts not yet present in nextCustomers
+          for (const [key, debtVal] of Object.entries(res.customerDebts)) {
+            const val = Number(debtVal) || 0;
+            if (val > 0 && !matchedDebtKeys.has(key)) {
+              const kDigits = extractEmployeeDigits(key) || '';
+              const newCust: Customer = {
+                id: `CUST-${kDigits || Date.now()}`,
+                code: kDigits || 'EMP',
+                name: key,
+                category: 'موظف',
+                remainingDebt: val,
+                totalOrders: val,
+                totalPaid: 0,
+                creditLimit: 500,
+                status: 'مدين',
+                department: 'عام',
+                lastActivity: new Date().toISOString(),
+              };
+              nextCustomers.push(newCust);
+              matchedDebtKeys.add(key);
+              hasCustomerChanges = true;
+            }
+          }
+
           if (hasOrderChanges) {
             const seenIds = new Set<string>();
             const dedupedOrders = nextOrders.filter(o => {
@@ -616,19 +692,68 @@ export default function App() {
           return nextCustomers;
         });
 
-        // 3. Update menu items if returned
+        // 3. Update menu items & live availability from Google Sheet
         if (res.menuItems && res.menuItems.length > 0) {
           setMenuItems(prev => {
-            const existingNames = new Set(prev.map(p => p.name.trim()));
-            const newOnes = res.menuItems!.filter(m => !existingNames.has(m.name.trim()));
+            // Map sheet items by clean name and code
+            const sheetItemsMap = new Map<string, any>();
+            res.menuItems!.forEach(s => {
+              if (s.code) {
+                const c = String(s.code).trim().toLowerCase();
+                sheetItemsMap.set(c, s);
+                const digits = c.replace(/\D/g, '');
+                if (digits) sheetItemsMap.set(digits, s);
+              }
+              if (s.name) {
+                sheetItemsMap.set(String(s.name).trim().toLowerCase(), s);
+                sheetItemsMap.set(normalizeArabicName(s.name), s);
+              }
+            });
+
+            // Update existing items availability & price
+            let hasChanges = false;
+            const updated = prev.map(existing => {
+              const codeDigits = (existing.code || '').replace(/\D/g, '');
+              const matched = (existing.code && sheetItemsMap.get(String(existing.code).trim().toLowerCase())) ||
+                              (codeDigits && sheetItemsMap.get(codeDigits)) ||
+                              sheetItemsMap.get(String(existing.name).trim().toLowerCase()) ||
+                              sheetItemsMap.get(normalizeArabicName(existing.name));
+              if (matched) {
+                // Determine availability: checks false, 'غير متاح', 'غير متوفر', 'لا', etc.
+                const statusStr = String(matched.status || matched.availability || '').trim().toLowerCase();
+                const isExplicitlyUnavailable = matched.available === false || 
+                  statusStr.includes('غير') || 
+                  statusStr === 'لا' || 
+                  statusStr === 'false' || 
+                  statusStr === '0' ||
+                  statusStr.includes('نفد');
+                const nextAvailable = !isExplicitlyUnavailable;
+
+                if (existing.available !== nextAvailable || (matched.price && existing.price !== matched.price)) {
+                  hasChanges = true;
+                  return {
+                    ...existing,
+                    available: nextAvailable,
+                    price: Number(matched.price) || existing.price,
+                  };
+                }
+              }
+              return existing;
+            });
+
+            // Also append any new items from sheet
+            const existingNames = new Set(prev.map(p => normalizeArabicName(p.name)));
+            const newOnes = res.menuItems!.filter(m => !existingNames.has(normalizeArabicName(m.name)));
             if (newOnes.length > 0) {
-              const merged = [...prev, ...newOnes];
-              try {
-                localStorage.setItem('cafe_menu_data_v6', JSON.stringify(merged));
-              } catch {}
-              return merged;
+              hasChanges = true;
             }
-            return prev;
+            const result = hasChanges ? [...updated, ...newOnes] : prev;
+            if (hasChanges) {
+              try {
+                localStorage.setItem('cafe_menu_data_v6', JSON.stringify(result));
+              } catch {}
+            }
+            return result;
           });
         }
 
@@ -931,6 +1056,11 @@ export default function App() {
       return;
     }
 
+    if (item.available === false) {
+      alert('عفواً، هذا الصنف غير متوفر حالياً في بوفية اسمنت العامرية.');
+      return;
+    }
+
     const sizeDelta = options?.sizePriceDelta || 0;
     const unitPrice = item.price + sizeDelta;
     const cartItemId = `${item.id}-${options?.sugar || 'default'}-${options?.size || 'regular'}-${options?.notes || ''}`;
@@ -1097,8 +1227,9 @@ export default function App() {
       }
     }
 
-    // 3. Open receipt
+    // 3. Open receipt & play confirmation chime
     setReceiptOrder(newOrder);
+    sounds.playOrderSuccess();
 
     // 4. Send the new order DIRECTLY and IMMEDIATELY to Google Sheets
     let cust = newOrder.customerId ? (customers.find(c => c.id === newOrder.customerId) || INITIAL_CUSTOMERS.find(c => c.id === newOrder.customerId)) : null;
@@ -1119,6 +1250,7 @@ export default function App() {
 
   // Payment Settlement handling with background synchronization
   const handleRecordPayment = (txn: PaymentTransaction) => {
+    sounds.playPaymentSuccess();
     setTransactions(prev => {
       const updatedTxns = [txn, ...prev];
       try {
@@ -1307,6 +1439,8 @@ export default function App() {
       sessionStorage.setItem('cafe_active_customer_id', emp.id);
     } catch {}
     setActiveTab('menu');
+    // Immediately pull the latest actual debt from Google Sheet so the employee sees their true balance
+    handleSyncPaidOrdersAndDebts().catch(() => {});
   };
 
   const handleRegisterNewEmployee = (newEmp: Customer) => {
@@ -1515,12 +1649,13 @@ export default function App() {
             onOpenLuckyWheel={() => {
               if (isEmployee) setIsLuckyWheelOpen(true);
             }}
+            onOpenShiftSummary={() => setIsShiftSummaryOpen(true)}
             totalDebt={kpis.totalDebt}
             activeCustomer={activeCustomer}
             onSwitchCustomer={handleClearActiveCustomer}
             onOpenCustomerSettle={() => setIsCustomerSettleOpen(true)}
             isAdminMode={isAdminMode}
-            onToggleAdminMode={() => setIsAdminMode(prev => !prev)}
+            onToggleAdminMode={isAdminMode ? () => setIsAdminMode(false) : handleOpenAdminPrompt}
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
             isEmployee={isEmployee}
@@ -1545,24 +1680,12 @@ export default function App() {
                 onOpenDebts={() => setActiveTab('debts')}
                 onSwitchCustomer={handleClearActiveCustomer}
                 isEmployee={isEmployee}
+                onSwitchToAdmin={handleOpenAdminPrompt}
               />
             )}
 
             {activeTab === 'debts' && (
-              !isAdminMode && activeCustomer ? (
-                /* Customer Portal View: shows ONLY their own debt, and disappears as soon as settled! */
-                <CustomerPortalView
-                  customer={activeCustomer}
-                  orders={orders}
-                  transactions={transactions}
-                  onOpenSettleModal={() => setIsCustomerSettleOpen(true)}
-                  onViewReceipt={(order) => setReceiptOrder(order)}
-                  onSwitchAccount={handleClearActiveCustomer}
-                  onGoToMenu={() => setActiveTab('menu')}
-                  onOpenLuckyWheel={() => setIsLuckyWheelOpen(true)}
-                  onRefreshDebt={handleSyncPaidOrdersAndDebts}
-                />
-              ) : (
+              isAdminMode ? (
                 /* Admin view: full debitor management sheet */
                 <DebtsDashboard
                   customers={customers}
@@ -1584,21 +1707,37 @@ export default function App() {
                   isGoogleConnected={Boolean(googleUser)}
                   onRecordHospitalityOrder={handleCheckoutComplete}
                 />
-              )
+              ) : activeCustomer ? (
+                /* Customer Portal View: shows ONLY their own debt, strictly private to this employee */
+                <CustomerPortalView
+                  customer={activeCustomer}
+                  orders={orders}
+                  transactions={transactions}
+                  onOpenSettleModal={() => setIsCustomerSettleOpen(true)}
+                  onViewReceipt={(order) => setReceiptOrder(order)}
+                  onSwitchAccount={handleClearActiveCustomer}
+                  onGoToMenu={() => setActiveTab('menu')}
+                  onOpenLuckyWheel={() => setIsLuckyWheelOpen(true)}
+                  onRefreshDebt={handleSyncPaidOrdersAndDebts}
+                />
+              ) : null
             )}
 
             {activeTab === 'orders' && (
               <OrdersHistory
-                orders={activeCustomer && !isAdminMode
-                  ? orders.filter(o => {
-                      if (o.customerId === activeCustomer.id) return true;
-                      if (activeCustomer.code && o.customerName && o.customerName.includes(activeCustomer.code)) return true;
-                      const cDigits = extractEmployeeDigits(activeCustomer.code) || extractEmployeeDigits(activeCustomer.name);
-                      const oDigits = extractEmployeeDigits(o.customerName) || extractEmployeeDigits(o.customerId);
-                      if (cDigits && oDigits && cDigits === oDigits) return true;
-                      return false;
-                    })
-                  : orders
+                orders={isAdminMode
+                  ? orders
+                  : (activeCustomer
+                    ? orders.filter(o => {
+                        if (o.customerId === activeCustomer.id) return true;
+                        if (activeCustomer.code && o.customerName && o.customerName.includes(activeCustomer.code)) return true;
+                        const cDigits = extractEmployeeDigits(activeCustomer.code) || extractEmployeeDigits(activeCustomer.name);
+                        const oDigits = extractEmployeeDigits(o.customerName) || extractEmployeeDigits(o.customerId);
+                        if (cDigits && oDigits && cDigits === oDigits) return true;
+                        return false;
+                      })
+                    : []
+                  )
                 }
                 onViewReceipt={(order) => setReceiptOrder(order)}
                 onSyncOrdersToSheet={isAdminMode ? handleSyncAllOrdersToSheet : undefined}
@@ -1713,6 +1852,94 @@ export default function App() {
           menuItems={menuItems}
           onAddFreeGift={handleAddFreeGiftToCart}
         />
+      )}
+
+      {/* Cashier Shift Summary & Day Close Modal */}
+      <ShiftSummaryModal
+        isOpen={isShiftSummaryOpen}
+        onClose={() => setIsShiftSummaryOpen(false)}
+        orders={orders}
+        transactions={transactions}
+      />
+
+      {/* Admin / Cashier PIN Modal */}
+      {isAdminPinModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 border border-[#e8e2d9] shadow-2xl text-right space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#f0eae1]">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold">
+                  <Lock className="w-5 h-5 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#26201b]">دخول الكاشير والإدارة</h3>
+                  <span className="text-[11px] text-[#8c8072]">رمز PIN السري المعتمد</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAdminPinModalOpen(false);
+                  setAdminPinError('');
+                  setAdminPinInput('');
+                }}
+                className="w-8 h-8 rounded-lg hover:bg-[#f2ece4] flex items-center justify-center text-[#7d7367] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAdminPinSubmit} className="space-y-3.5">
+              <p className="text-xs text-[#7d7367] leading-relaxed">
+                أدخل رمز PIN للكاشير (11803) للانتقال المباشر إلى لوحة إدارة المبيعات، كشف الحساب، والمديونيات العامة.
+              </p>
+
+              <div>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  value={adminPinInput}
+                  onChange={(e) => {
+                    setAdminPinInput(e.target.value);
+                    if (adminPinError) setAdminPinError('');
+                  }}
+                  maxLength={10}
+                  placeholder="أدخل رمز PIN..."
+                  autoFocus
+                  className="w-full py-3 px-4 bg-[#faf8f5] border-2 border-[#dcd4c8] focus:border-[#c48956] rounded-2xl text-center text-lg font-black tracking-widest text-[#26201b] focus:outline-none transition-all shadow-inner"
+                  required
+                />
+              </div>
+
+              {adminPinError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold text-center flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{adminPinError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 bg-[#172338] hover:bg-[#243553] text-white rounded-xl text-xs font-black shadow-md transition-all cursor-pointer"
+                >
+                  تأكيد ودخول لوحة الكاشير
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdminPinModalOpen(false);
+                    setAdminPinError('');
+                    setAdminPinInput('');
+                  }}
+                  className="py-3 px-4 bg-[#f5f1eb] hover:bg-[#eae3d8] text-[#5c5043] rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  إلغاء
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

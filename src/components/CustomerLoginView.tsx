@@ -28,14 +28,31 @@ export const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({
   onSwitchToAdminMode,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDept, setSelectedDept] = useState<string>('all');
+
+  // Extract unique departments dynamically
+  const departments = React.useMemo(() => {
+    const set = new Set<string>();
+    customers.forEach(c => {
+      if (c.department && c.department.trim() && c.department !== '-') {
+        set.add(c.department.trim());
+      }
+    });
+    return Array.from(set).sort();
+  }, [customers]);
 
   const filteredCustomers = customers.filter(c => {
     const q = searchQuery.toLowerCase().trim();
-    return (
+    const matchesSearch = (
       String(c.name || '').toLowerCase().includes(q) ||
       String(c.code || '').toLowerCase().includes(q) ||
       (c.phone && String(c.phone).includes(q))
     );
+
+    if (!matchesSearch) return false;
+
+    if (selectedDept === 'all') return true;
+    return c.department === selectedDept;
   });
 
   return (
@@ -58,7 +75,7 @@ export const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({
         </div>
 
         {/* Content Body */}
-        <div className="p-6 sm:p-8 space-y-6">
+        <div className="p-6 sm:p-8 space-y-5">
           {/* Search / Selection input */}
           <div className="space-y-2">
             <label className="block text-xs sm:text-sm font-bold text-[#26201b]">
@@ -69,11 +86,43 @@ export const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ابحث باسمك (مثال: أحمد مصطفى) أو الكود (EMP-101)..."
+                placeholder="ابحث باسمك (مثال: نادر محمد أو 13827)..."
                 className="w-full pr-10 pl-4 py-3 bg-[#faf8f5] border border-[#dcd4c8] rounded-2xl text-sm font-bold text-[#26201b] placeholder-[#a89e92] focus:outline-none focus:ring-2 focus:ring-[#c48956] focus:border-transparent transition-all"
                 autoFocus
               />
               <Search className="w-5 h-5 text-[#8c8072] absolute right-3.5 top-1/2 -translate-y-1/2" />
+            </div>
+          </div>
+
+          {/* Department Quick Filter Chips */}
+          <div className="space-y-1.5">
+            <span className="text-[11px] font-semibold text-[#8c8072] block">تصفية سريعة:</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setSelectedDept('all')}
+                className={`px-3 py-1 rounded-xl font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                  selectedDept === 'all'
+                    ? 'bg-[#26201b] text-white shadow-xs'
+                    : 'bg-[#f4efe8] text-[#635749] hover:bg-[#eae3d8]'
+                }`}
+              >
+                جميع الأقسام ({customers.length})
+              </button>
+              {departments.map(dept => (
+                <button
+                  key={dept}
+                  type="button"
+                  onClick={() => setSelectedDept(dept)}
+                  className={`px-3 py-1 rounded-xl font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                    selectedDept === dept
+                      ? 'bg-[#c48956] text-white shadow-xs'
+                      : 'bg-[#f4efe8] text-[#635749] hover:bg-[#eae3d8]'
+                  }`}
+                >
+                  {dept}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -134,19 +183,10 @@ export const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 flex-shrink-0">
-                        {/* Notice: we don't display their exact debt here openly so others glancing don't see it, but a subtle status */}
-                        {hasDebt ? (
-                          <span className="text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
-                            مديونية نشطة
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-0.5">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                            <span>حساب خالص</span>
-                          </span>
-                        )}
-
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[11px] text-[#8c8072] font-semibold hidden sm:inline">
+                          تسجيل الدخول
+                        </span>
                         <div className="w-7 h-7 rounded-lg bg-[#f0eae1] group-hover:bg-[#26201b] group-hover:text-white text-[#7d7367] flex items-center justify-center transition-all">
                           <ArrowLeft className="w-3.5 h-3.5" />
                         </div>
