@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Printer, UserCheck, Calendar, Receipt, DollarSign, Clock } from 'lucide-react';
 import { Customer, Order, PaymentTransaction } from '../types';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { buildWhatsAppDebtUrl } from '../utils/security';
 
 interface CustomerStatementModalProps {
   customer: Customer | null;
@@ -211,19 +212,27 @@ export const CustomerStatementModal: React.FC<CustomerStatementModalProps> = ({
               <span>طباعة كشف الحساب</span>
             </button>
 
-            {customer.remainingDebt > 0 && (
-              <a
-                href={`https://wa.me/${(customer.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(
-                  `مرحباً أستاذ ${customer.name} (كود: ${customer.code})،\nنود إحاطتكم علماً بأن رصيد مديونيتكم المعلق لدى كافيتريا وبوفيه أسمنت العامرية هو: ${customer.remainingDebt} ج.م.\nيمكنكم السداد نقداً للكاشير أو عبر إنستاباي / فودافون كاش.\nشاكرين لتعاونكم الدائم!`
-                )}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
-                title="إرسال تذكير بالمديونية على واتساب"
-              >
-                <span>واتساب 💬</span>
-              </a>
-            )}
+            {customer.remainingDebt > 0 && (() => {
+              const waUrl = buildWhatsAppDebtUrl(customer);
+              return waUrl ? (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-all shadow-2xs"
+                  title="إرسال تذكير بالمديونية على واتساب"
+                >
+                  <span>واتساب 💬</span>
+                </a>
+              ) : (
+                <span
+                  className="flex items-center gap-1 px-3 py-2 bg-gray-50 text-gray-400 border border-gray-200 rounded-xl text-xs font-medium cursor-not-allowed"
+                  title="لا يتوفر رقم هاتف مسجل لهذا العميل"
+                >
+                  <span>واتساب (بدون رقم)</span>
+                </span>
+              );
+            })()}
           </div>
 
           <div className="flex items-center gap-2">

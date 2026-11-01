@@ -83,6 +83,7 @@ import {
   purgeStuckOldOrdersFromQueue,
   clearOutboxQueue
 } from './services/syncQueue';
+import { normalizeDigits, isCorrectAdminPin, resetFailedPinAttempts } from './utils/security';
 
 // One-time automatic refresh of debts data for updated debts sheet & stale session cleanup
 const OFFICIAL_LAUNCH_KEY = 'amreyah_buffet_launch_v3_reconciled';
@@ -171,7 +172,7 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_TRANSACTIONS;
   });
 
-  // Active Customer Session (Customer-first Portal)
+  // Active Customer Session (Multi-tier session persistence for seamless page reload)
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(() => {
     try {
       return localStorage.getItem('cafe_active_customer_id') || sessionStorage.getItem('cafe_active_customer_id') || null;
@@ -180,42 +181,129 @@ export default function App() {
     }
   });
 
+  const [activeCustomerCode, setActiveCustomerCode] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('cafe_active_customer_code') || sessionStorage.getItem('cafe_active_customer_code') || null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [persistedCustomerObj, setPersistedCustomerObj] = useState<Customer | null>(() => {
+    try {
+      const raw = localStorage.getItem('cafe_active_customer_obj') || sessionStorage.getItem('cafe_active_customer_obj');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && (parsed.id || parsed.code || parsed.name)) {
+          return parsed as Customer;
+        }
+      }
+    } catch {}
+    return null;
+  });
+
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isCustomerSettleOpen, setIsCustomerSettleOpen] = useState(false);
 
-  // Computed Active Customer (matched strictly by exact ID or employee badge code)
-  const activeCustomer = useMemo(() => {
-    if (!activeCustomerId) return null;
-    const strActiveId = String(activeCustomerId).trim();
+  // Computed Active Customer (matched strictly by employee code, exact ID, or persistent session cache)
+  const activeCustomer = useMemo<Customer | null>(() => {
+    if (!activeCustomerId && !activeCustomerCode && !persistedCustomerObj) return null;
+
+    const strActiveId = String(activeCustomerId || '').trim();
+    const strActiveCode = String(activeCustomerCode || '').trim();
+    const targetDigits = (strActiveCode ? extractEmployeeDigits(strActiveCode) : null) || 
+                         (strActiveId ? extractEmployeeDigits(strActiveId) : null) ||
+                         (persistedCustomerObj ? (extractEmployeeDigits(persistedCustomerObj.code) || extractEmployeeDigits(persistedCustomerObj.name)) : null);
+
     const matcher = (c: Customer) => {
       if (!c) return false;
       const strCId = String(c.id ?? '').trim();
       const strCCode = String(c.code ?? '').trim();
-      if (strCId && strCId === strActiveId) return true;
-      if (strCCode && (strCCode === strActiveId || ("CUST-" + strCCode) === strActiveId)) return true;
-      if (strActiveId.startsWith('CUST-GUEST') || strActiveId === 'GUEST') return false;
       const cDigits = extractEmployeeDigits(strCCode) || extractEmployeeDigits(c.name);
-      const activeDigits = extractEmployeeDigits(strActiveId);
-      if (cDigits && activeDigits && cDigits !== '1000' && activeDigits !== '1000') {
-        if (cDigits === activeDigits) return true;
-        const strippedC = cDigits.replace(/^0+/, '') || '0';
-        const strippedActive = activeDigits.replace(/^0+/, '') || '0';
-        if (strippedC === strippedActive) return true;
+
+      // 1. Direct ID match
+      if (strActiveId && strCId && strCId === strActiveId) return true;
+
+      // 2. Direct Code match
+      if (strActiveCode && strCCode && strCCode === strActiveCode) return true;
+      if (strActiveId && strCCode && (strCCode === strActiveId || ("CUST-" + strCCode) === strActiveId)) return true;
+
+      // 3. Guest match
+      if ((strActiveId.startsWith('CUST-GUEST') || strActiveId === 'GUEST') && (c.id === strActiveId || c.code === 'GUEST')) {
+        return true;
       }
+
+      // 4. Match by employee badge digits (e.g. 13827, 13088, 11803)
+      if (targetDigits && cDigits && targetDigits !== '1000' && cDigits !== '1000') {
+        if (cDigits === targetDigits) return true;
+        const strippedC = cDigits.replace(/^0+/, '') || '0';
+        const strippedTarget = targetDigits.replace(/^0+/, '') || '0';
+        if (strippedC === strippedTarget) return true;
+      }
+
+      // 5. Match by exact normalized Arabic name (fail-safe for customer records)
+      if (persistedCustomerObj?.name && c.name) {
+        const normC = normalizeArabicName(extractCleanEmployeeName(c.name));
+        const normPersisted = normalizeArabicName(extractCleanEmployeeName(persistedCustomerObj.name));
+        if (normC && normPersisted && normC.length >= 6 && normC === normPersisted) {
+          return true;
+        }
+      }
+
       return false;
     };
 
-    const found = customers.find(matcher) || INITIAL_CUSTOMERS.find(matcher) || null;
-    return found;
-  }, [customers, activeCustomerId]);
+    const foundInState = customers.find(matcher);
+    if (foundInState) return foundInState;
+
+    const foundInInitial = INITIAL_CUSTOMERS.find(matcher);
+    if (foundInInitial) return foundInInitial;
+
+    // Fallback: If customers array hasn't finished merging or employee was verified, return the persisted snapshot!
+    if (persistedCustomerObj) {
+      return persistedCustomerObj;
+    }
+
+    return null;
+  }, [customers, activeCustomerId, activeCustomerCode, persistedCustomerObj]);
+
+  // Synchronize persistent storage whenever activeCustomer is updated or refreshed from Google Sheet
+  useEffect(() => {
+    if (activeCustomer) {
+      try {
+        localStorage.setItem('cafe_active_customer_id', activeCustomer.id);
+        sessionStorage.setItem('cafe_active_customer_id', activeCustomer.id);
+        if (activeCustomer.code) {
+          localStorage.setItem('cafe_active_customer_code', activeCustomer.code);
+          sessionStorage.setItem('cafe_active_customer_code', activeCustomer.code);
+        }
+        localStorage.setItem('cafe_active_customer_obj', JSON.stringify(activeCustomer));
+        sessionStorage.setItem('cafe_active_customer_obj', JSON.stringify(activeCustomer));
+      } catch {}
+    }
+  }, [activeCustomer]);
 
   // Only employees who log in with their code get access to the Fortune Wheel
   const isEmployee = useMemo(() => {
     return activeCustomer?.category === 'موظف';
   }, [activeCustomer]);
 
-  // UI Navigation & Cart State
-  const [activeTab, setActiveTab] = useState<'menu' | 'debts' | 'orders'>('menu');
+  // UI Navigation & Cart State with tab persistence across reloads
+  const [activeTab, setActiveTab] = useState<'menu' | 'debts' | 'orders'>(() => {
+    try {
+      const savedTab = localStorage.getItem('cafe_active_tab');
+      if (savedTab === 'menu' || savedTab === 'debts' || savedTab === 'orders') {
+        return savedTab;
+      }
+    } catch {}
+    return 'menu';
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('cafe_active_tab', activeTab);
+    } catch {}
+  }, [activeTab]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -240,8 +328,9 @@ export default function App() {
 
   const handleAdminPinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = adminPinInput.trim();
-    if (['11803', '14043', '1234', '1148'].includes(clean)) {
+    const clean = normalizeDigits(adminPinInput);
+    if (isCorrectAdminPin(clean)) {
+      resetFailedPinAttempts();
       setIsAdminMode(true);
       setActiveCustomerId(null);
       setIsAdminPinModalOpen(false);
@@ -392,8 +481,8 @@ export default function App() {
     // Run immediately
     runAutomatedSync();
 
-    // Run every 15 seconds
-    const interval = setInterval(runAutomatedSync, 15000);
+    // Run continuously every 10 seconds
+    const interval = setInterval(runAutomatedSync, 10000);
 
     // Run on tab focus
     const onFocus = () => runAutomatedSync();
@@ -437,12 +526,12 @@ export default function App() {
     }
   }, [activeSpreadsheetId, googleAccessToken]);
 
-  // Automated background polling for menu updates from Google Sheets (runs on load and every 60s)
+  // Automated background polling for menu updates from Google Sheets (runs on load and continuously every 10s)
   useEffect(() => {
     handleSyncMenuFromSheet().catch(() => {});
     const interval = setInterval(() => {
       handleSyncMenuFromSheet().catch(() => {});
-    }, 60000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [handleSyncMenuFromSheet]);
 
@@ -781,7 +870,7 @@ export default function App() {
     handleSyncPaidOrdersAndDebts().catch(() => {});
     const interval = setInterval(() => {
       handleSyncPaidOrdersAndDebts().catch(() => {});
-    }, 3500);
+    }, 10000);
 
     const onRecheck = () => {
       handleSyncPaidOrdersAndDebts().catch(() => {});
@@ -1413,10 +1502,16 @@ export default function App() {
   // Clear active customer session completely
   const handleClearActiveCustomer = useCallback(() => {
     setActiveCustomerId(null);
+    setActiveCustomerCode(null);
+    setPersistedCustomerObj(null);
     setIsAdminMode(false);
     try {
       localStorage.removeItem('cafe_active_customer_id');
+      localStorage.removeItem('cafe_active_customer_code');
+      localStorage.removeItem('cafe_active_customer_obj');
       sessionStorage.removeItem('cafe_active_customer_id');
+      sessionStorage.removeItem('cafe_active_customer_code');
+      sessionStorage.removeItem('cafe_active_customer_obj');
     } catch {}
   }, []);
 
@@ -1434,9 +1529,17 @@ export default function App() {
       return prev;
     });
     setActiveCustomerId(emp.id);
+    setActiveCustomerCode(emp.code || null);
+    setPersistedCustomerObj(emp);
     try {
       localStorage.setItem('cafe_active_customer_id', emp.id);
       sessionStorage.setItem('cafe_active_customer_id', emp.id);
+      if (emp.code) {
+        localStorage.setItem('cafe_active_customer_code', emp.code);
+        sessionStorage.setItem('cafe_active_customer_code', emp.code);
+      }
+      localStorage.setItem('cafe_active_customer_obj', JSON.stringify(emp));
+      sessionStorage.setItem('cafe_active_customer_obj', JSON.stringify(emp));
     } catch {}
     setActiveTab('menu');
     // Immediately pull the latest actual debt from Google Sheet so the employee sees their true balance
@@ -1448,9 +1551,17 @@ export default function App() {
     const regKey = `${newEmp.code || ''}_${newEmp.name || ''}`.trim().toLowerCase();
     if (registeredEmployeesRef.current.has(regKey) || registeredEmployeesRef.current.has(newEmp.id)) {
       setActiveCustomerId(newEmp.id);
+      setActiveCustomerCode(newEmp.code || null);
+      setPersistedCustomerObj(newEmp);
       try {
         localStorage.setItem('cafe_active_customer_id', newEmp.id);
         sessionStorage.setItem('cafe_active_customer_id', newEmp.id);
+        if (newEmp.code) {
+          localStorage.setItem('cafe_active_customer_code', newEmp.code);
+          sessionStorage.setItem('cafe_active_customer_code', newEmp.code);
+        }
+        localStorage.setItem('cafe_active_customer_obj', JSON.stringify(newEmp));
+        sessionStorage.setItem('cafe_active_customer_obj', JSON.stringify(newEmp));
       } catch {}
       return;
     }
@@ -1459,12 +1570,20 @@ export default function App() {
 
     const merged = deduplicateCustomers([newEmp, ...customers]);
     setCustomers(merged);
+    setActiveCustomerId(newEmp.id);
+    setActiveCustomerCode(newEmp.code || null);
+    setPersistedCustomerObj(newEmp);
     try {
       localStorage.setItem('cafe_customers_data', JSON.stringify(merged));
       localStorage.setItem('cafe_active_customer_id', newEmp.id);
       sessionStorage.setItem('cafe_active_customer_id', newEmp.id);
+      if (newEmp.code) {
+        localStorage.setItem('cafe_active_customer_code', newEmp.code);
+        sessionStorage.setItem('cafe_active_customer_code', newEmp.code);
+      }
+      localStorage.setItem('cafe_active_customer_obj', JSON.stringify(newEmp));
+      sessionStorage.setItem('cafe_active_customer_obj', JSON.stringify(newEmp));
     } catch {}
-    setActiveCustomerId(newEmp.id);
 
     // Fast non-blocking background sync directly via webhook
     appendNewCustomerViaWebhook(newEmp).catch(console.warn);
@@ -1578,12 +1697,13 @@ export default function App() {
     }
   };
 
-  // Initial pull of registered employees and menu from Google Sheet on startup (never overwrites manual rows)
+  // Pull registered employees and accounts from Google Sheet immediately and continuously every 10 seconds
   useEffect(() => {
-    const startupTimer = setTimeout(() => {
+    handleSyncEmployeesFromSheet().catch(() => {});
+    const interval = setInterval(() => {
       handleSyncEmployeesFromSheet().catch(() => {});
-    }, 1500);
-    return () => clearTimeout(startupTimer);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [handleSyncEmployeesFromSheet]);
 
   const handleSelectGuest = (guestName?: string) => {
@@ -1605,12 +1725,23 @@ export default function App() {
       };
       setCustomers(prev => {
         const updated = [guestCust!, ...prev];
-        localStorage.setItem('cafe_customers_data', JSON.stringify(updated));
+        try {
+          localStorage.setItem('cafe_customers_data', JSON.stringify(updated));
+        } catch {}
         return updated;
       });
     }
     setActiveCustomerId(guestCust.id);
-    sessionStorage.setItem('cafe_active_customer_id', guestCust.id);
+    setActiveCustomerCode('GUEST');
+    setPersistedCustomerObj(guestCust);
+    try {
+      localStorage.setItem('cafe_active_customer_id', guestCust.id);
+      sessionStorage.setItem('cafe_active_customer_id', guestCust.id);
+      localStorage.setItem('cafe_active_customer_code', 'GUEST');
+      sessionStorage.setItem('cafe_active_customer_code', 'GUEST');
+      localStorage.setItem('cafe_active_customer_obj', JSON.stringify(guestCust));
+      sessionStorage.setItem('cafe_active_customer_obj', JSON.stringify(guestCust));
+    } catch {}
     setActiveTab('menu');
   };
 
@@ -1900,7 +2031,7 @@ export default function App() {
                   inputMode="numeric"
                   value={adminPinInput}
                   onChange={(e) => {
-                    setAdminPinInput(e.target.value);
+                    setAdminPinInput(normalizeDigits(e.target.value));
                     if (adminPinError) setAdminPinError('');
                   }}
                   maxLength={10}

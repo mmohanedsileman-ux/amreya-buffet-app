@@ -20,7 +20,13 @@ import {
 import { Customer } from '../types';
 import { INITIAL_CUSTOMERS } from '../data/initialData';
 import { AmreyahBuffetLogo } from './AmreyahBuffetLogo';
-import { getAdminSecurityStatus, recordFailedPinAttempt, resetFailedPinAttempts } from '../utils/security';
+import { 
+  getAdminSecurityStatus, 
+  recordFailedPinAttempt, 
+  resetFailedPinAttempts,
+  normalizeDigits,
+  isCorrectAdminPin 
+} from '../utils/security';
 import { 
   getNextCustomerCode, 
   getCustomerBadgeCode, 
@@ -73,22 +79,28 @@ export const WelcomeOrderPortal: React.FC<WelcomeOrderPortalProps> = ({
 
   const handleAdminPinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleanPin = normalizeDigits(adminPin);
+
+    // If correct PIN is entered, unlock immediately and bypass any stale lockout
+    if (isCorrectAdminPin(cleanPin)) {
+      resetFailedPinAttempts();
+      setAdminSecurityStatus(getAdminSecurityStatus());
+      setAdminPinError('');
+      onSwitchToAdmin();
+      return;
+    }
+
     if (adminSecurityStatus.isLocked) {
       setAdminPinError(`تم قفل محاولات الدخول مؤقتاً. يرجى الانتظار ${adminSecurityStatus.remainingLockSeconds} ثانية.`);
       return;
     }
-    const cleanPin = adminPin.trim();
-    if (['11803', '14043', '1234', '1148'].includes(cleanPin)) {
-      resetFailedPinAttempts();
-      onSwitchToAdmin();
+
+    const res = recordFailedPinAttempt();
+    setAdminSecurityStatus(getAdminSecurityStatus());
+    if (res.isLocked) {
+      setAdminPinError('تم حظر المحاولات مؤقتاً بعد استنفاد المحاولات الخاطئة.');
     } else {
-      const res = recordFailedPinAttempt();
-      setAdminSecurityStatus(getAdminSecurityStatus());
-      if (res.isLocked) {
-        setAdminPinError('تم حظر المحاولات لمدة 5 دقائق بعد استنفاد محاولات الدخول الخاطئة.');
-      } else {
-        setAdminPinError(`رمز PIN غير صحيح. متبقي ${res.remainingAttempts} محاولات قبل القفل المؤقت.`);
-      }
+      setAdminPinError(`رمز PIN غير صحيح. متبقي ${res.remainingAttempts} محاولات قبل القفل المؤقت.`);
     }
   };
 
@@ -408,32 +420,32 @@ export const WelcomeOrderPortal: React.FC<WelcomeOrderPortalProps> = ({
                         إلغاء
                       </button>
                     </div>
-                    {adminSecurityStatus.isLocked ? (
-                      <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-[11px] font-bold text-center">
-                        🔒 تم قفل المحاولات مؤقتاً ({adminSecurityStatus.remainingLockSeconds} ثانية متبقية)
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          value={adminPin}
-                          maxLength={12}
-                          onChange={(e) => {
-                            setAdminPin(e.target.value);
-                            setAdminPinError('');
-                          }}
-                          placeholder="أدخل رمز الدخول..."
-                          autoFocus
-                          className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
-                        />
-                        <button
-                          type="submit"
-                          className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
-                        >
-                          دخول
-                        </button>
+                    {adminSecurityStatus.isLocked && (
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] font-bold text-center">
+                        🔒 محاولات خاطئة مؤقتة ({adminSecurityStatus.remainingLockSeconds} ثانية). أدخل رمز PIN الصحيح (11803) لفك القفل فوراً.
                       </div>
                     )}
+                    <div className="flex gap-2">
+                      <input
+                        type="password"
+                        inputMode="numeric"
+                        value={adminPin}
+                        maxLength={12}
+                        onChange={(e) => {
+                          setAdminPin(normalizeDigits(e.target.value));
+                          setAdminPinError('');
+                        }}
+                        placeholder="أدخل رمز الدخول (11803)..."
+                        autoFocus
+                        className="flex-1 px-3 py-2 bg-white border border-[#d6ccbf] rounded-xl text-center text-sm font-bold tracking-widest focus:outline-none focus:border-[#c48956]"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-[#172338] hover:bg-[#243553] text-white px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+                      >
+                        دخول
+                      </button>
+                    </div>
                     {adminPinError && (
                       <div className="text-[11px] text-rose-600 font-bold text-center">
                         {adminPinError}

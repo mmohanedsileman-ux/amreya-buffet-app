@@ -30,6 +30,7 @@ import {
 import { Customer, Order, SheetKPIs } from '../types';
 import { formatCurrency } from '../utils/formatters';
 import { generateEmployeesTsv, generateAccountsTsv } from '../services/googleSheets';
+import { buildWhatsAppDebtUrl } from '../utils/security';
 
 interface DebtsDashboardProps {
   customers: Customer[];
@@ -538,20 +539,29 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
                 <span>كشف حساب تفصيلي</span>
               </button>
 
-              {selectedCustomer.remainingDebt > 0 && (
-                <a
-                  href={`https://wa.me/${(selectedCustomer.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(
-                    `مرحباً أستاذ ${selectedCustomer.name} (كود: ${selectedCustomer.code})،\nنود إحاطتكم علماً بأن رصيد مديونيتكم المعلق لدى كافيتريا وبوفيه أسمنت العامرية هو: ${selectedCustomer.remainingDebt} ج.م.\nيمكنكم السداد نقداً للكاشير أو عبر إنستاباي / فودافون كاش.\nشاكرين لتعاونكم الدائم!`
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                  title="إرسال تذكير بالمديونية على واتساب"
-                >
-                  <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>تذكير واتساب 💬</span>
-                </a>
-              )}
+              {selectedCustomer.remainingDebt > 0 && (() => {
+                const waUrl = buildWhatsAppDebtUrl(selectedCustomer);
+                return waUrl ? (
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                    title="إرسال تذكير بالمديونية على واتساب بكود الدولة الدولي (+20)"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>تذكير واتساب 💬</span>
+                  </a>
+                ) : (
+                  <span
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 bg-gray-50 text-gray-400 border border-gray-200 px-3.5 py-2 rounded-xl text-xs font-medium cursor-not-allowed"
+                    title="لا يوجد رقم هاتف مسجل لهذا العميل - يرجى تسجيل رقم الهاتف أولاً"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5 text-gray-300" />
+                    <span>واتساب (بدون رقم)</span>
+                  </span>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -831,19 +841,27 @@ export const DebtsDashboard: React.FC<DebtsDashboardProps> = ({
                           >
                             كشف
                           </button>
-                          {isDebtor && (
-                            <a
-                              href={`https://wa.me/${(c.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(
-                                `مرحباً أستاذ ${c.name} (كود: ${c.code})،\nنود إحاطتكم علماً بأن رصيد مديونيتكم المعلق لدى كافيتريا وبوفيه أسمنت العامرية هو: ${c.remainingDebt} ج.م.\nيمكنكم السداد نقداً للكاشير أو عبر إنستاباي / فودافون كاش.\nشاكرين لتعاونكم الدائم!`
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
-                              title="إرسال تذكير عبر واتساب"
-                            >
-                              <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
-                            </a>
-                          )}
+                          {isDebtor && (() => {
+                            const waUrl = buildWhatsAppDebtUrl(c);
+                            return waUrl ? (
+                              <a
+                                href={waUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[11px] font-bold cursor-pointer transition-colors shadow-2xs"
+                                title="إرسال تذكير عبر واتساب (+20)"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                              </a>
+                            ) : (
+                              <span
+                                className="p-1 bg-gray-50 text-gray-300 border border-gray-200 rounded-lg text-[11px] inline-flex items-center justify-center cursor-not-allowed opacity-60"
+                                title="لا يوجد رقم هاتف مسجل لهذا العميل"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 text-gray-300" />
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>

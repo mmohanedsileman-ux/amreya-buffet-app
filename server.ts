@@ -76,7 +76,7 @@ async function startServer() {
   let cachedSyncDebtData: any = { success: true, paidOrderIds: [], customerDebts: {} };
   let hasValidCache = false;
   let lastSyncDebtTime = 0;
-  const CACHE_TTL_MS = 15000;
+  const CACHE_TTL_MS = 8000; // 8 seconds cache allows 10-second polling to fetch freshly updated data continuously
   let inFlightSyncDebtPromise: Promise<any> | null = null;
 
   async function fetchFromGoogleAppsScript(customUrl?: string | null): Promise<any> {
