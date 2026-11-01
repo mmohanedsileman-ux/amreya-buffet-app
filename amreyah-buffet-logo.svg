@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <filter id="subtle-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base -->
+  <circle cx="250" cy="250" r="240" fill="#ffffff" />
+
+  <!-- Outer Navy Circular Ring -->
+  <circle cx="250" cy="250" r="204" fill="none" stroke="#122749" stroke-width="5.5" />
+
+  <!-- Decorative Golden Wavy Ring -->
+  <path d="M 436.0 250.0 C 438.0 262.0 435.0 273.0 427.0 283.0 C 418.0 293.0 415.0 304.0 417.0 316.0 C 419.0 328.0 411.0 338.0 400.0 344.0 C 388.0 351.0 382.0 361.0 380.0 373.0 C 378.0 386.0 367.0 393.0 354.0 395.0 C 341.0 397.0 331.0 405.0 325.0 416.0 C 319.0 427.0 307.0 431.0 294.0 429.0 C 281.0 427.0 270.0 433.0 261.0 442.0 C 251.0 450.0 238.0 450.0 228.0 441.0 C 218.0 432.0 207.0 428.0 195.0 430.0 C 182.0 432.0 171.0 426.0 165.0 415.0 C 158.0 404.0 148.0 397.0 135.0 395.0 C 122.0 393.0 112.0 384.0 110.0 372.0 C 108.0 360.0 101.0 350.0 90.0 344.0 C 78.0 337.0 72.0 327.0 74.0 314.0 C 76.0 302.0 71.0 292.0 62.0 282.0 C 54.0 272.0 52.0 260.0 55.0 248.0 C 57.0 236.0 55.0 224.0 63.0 215.0 C 72.0 205.0 76.0 194.0 74.0 182.0 C 72.0 170.0 79.0 159.0 90.0 153.0 C 101.0 147.0 107.0 137.0 109.0 125.0 C 111.0 113.0 122.0 105.0 134.0 104.0 C 147.0 103.0 157.0 95.0 163.0 84.0 C 170.0 73.0 182.0 68.0 194.0 70.0 C 206.0 72.0 217.0 67.0 226.0 58.0 C 236.0 50.0 249.0 50.0 259.0 58.0 C 269.0 67.0 280.0 71.0 292.0 69.0 C 304.0 67.0 316.0 73.0 322.0 84.0 C 329.0 95.0 339.0 102.0 351.0 104.0 C 364.0 106.0 374.0 114.0 377.0 126.0 C 379.0 138.0 386.0 148.0 397.0 154.0 C 409.0 161.0 415.0 171.0 413.0 183.0 C 411.0 195.0 417.0 206.0 425.0 216.0 C 434.0 226.0 435.0 238.0 436.0 250.0 Z" 
+        fill="none" stroke="#ba8e54" stroke-width="4.5" stroke-linejoin="round" />
+
+  <!-- Monogram Group (A & C) -->
+  <g id="brand-monogram">
+    <!-- Letter A main navy shape -->
+    <path d="M 140 270 L 195 270 L 209 238 L 243 238 L 243 270 L 288 270 L 265 174 L 253 135 L 210 135 L 140 270 Z M 218 214 L 235 172 L 239 214 Z" 
+          fill="#122749" />
+
+    <!-- Letter C main navy shape -->
+    <path d="M 285 135 L 355 135 L 355 170 L 316 170 C 326 179 332 192 332 208 C 332 225 324 238 312 245 L 355 245 L 355 270 L 285 270 C 274 270 265 264 262 254 L 280 238 C 285 241 292 243 300 243 C 314 243 322 232 322 212 C 322 192 312 180 296 180 C 288 180 282 183 277 188 L 262 170 C 267 154 275 142 285 135 Z" 
+          fill="#122749" />
+
+    <!-- Connecting base line / fill -->
+    <rect x="190" y="247" width="98" height="23" fill="#122749" />
+
+    <!-- Golden Roasted Coffee Bean -->
+    <g transform="translate(262, 238) rotate(-22)">
+      <ellipse cx="0" cy="0" rx="16" ry="11" fill="#b1824a" />
+      <path d="M -15 0 Q -5 4 0 0 Q 5 -4 15 0 Q 5 -1 0 1 Q -5 3 -15 0 Z" fill="#122749" opacity="0.85" />
+    </g>
+
+    <!-- White Silhouette Fork & Spoon on the A/C junction -->
+    <g fill="#ffffff">
+      <!-- Fork on left -->
+      <path d="M 243 218 L 246 218 L 247 206 L 253 206 L 254 218 L 257 218 L 255 195 L 253 195 L 252 202 L 251 195 L 249 195 L 248 202 L 247 195 L 245 195 Z" />
+      <!-- Spoon on right -->
+      <ellipse cx="266" cy="199" rx="6.5" ry="9" />
+      <path d="M 264 207 L 268 207 L 267 220 L 265 220 Z" />
+    </g>
+
+    <!-- Rising Steam Curves (Navy) -->
+    <g fill="none" stroke="#122749" stroke-width="2.8" stroke-linecap="round">
+      <path d="M 255 178 C 251 168 259 158 253 146 C 250 140 252 133 256 124" />
+      <path d="M 262 176 C 267 167 261 157 266 146 C 269 139 267 131 262 122" />
+    </g>
+  </g>
+
+  <!-- AMREYAH BUFFET Text (Bold Navy Sans) -->
+  <text x="250" y="323" 
+        text-anchor="middle" 
+        fill="#122749" 
+        font-family="'Montserrat', 'Arial Black', sans-serif" 
+        font-size="28.5" 
+        font-weight="900" 
+        letter-spacing="2.8">AMREYAH BUFFET</text>
+
+  <!-- بوفية العامرية Arabic Text (Bold Calligraphic) -->
+  <text x="250" y="375" 
+        text-anchor="middle" 
+        fill="#122749" 
+        font-family="'Cairo', 'Almarai', 'Tajawal', 'Segoe UI', Tahoma, sans-serif" 
+        font-size="40" 
+        font-weight="900" 
+        letter-spacing="0.5">بوفية العامرية</text>
+</svg>
