@@ -213,7 +213,6 @@ export default function App() {
     }
   });
 
-  const [showEmployeeLoginDuringClosed, setShowEmployeeLoginDuringClosed] = useState(false);
   const [isCustomerSettleOpen, setIsCustomerSettleOpen] = useState(false);
 
   // Synchronize admin mode across page reloads
@@ -1776,39 +1775,23 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fcfbf9] text-[#1e1b18]">
-      {/* Outside official working hours (8:00 AM - 3:30 PM, or Friday & Saturday weekend): 
-          Show Closed Notice ONLY to unauthenticated visitors who have no active employee or admin session */}
-      {!isAdminMode && !activeCustomer && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() && !showEmployeeLoginDuringClosed ? (
+      {/* Outside official working hours (8:00 AM - 3:30 PM Cairo time, or Friday & Saturday weekend): 
+          Strictly show Closed Notice to all employees and visitors - only Admin / Cashier with PIN 11803 can enter */}
+      {!isAdminMode && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() ? (
         <ClosedHoursNotice 
           onSwitchToAdmin={() => setIsAdminMode(true)} 
-          onOpenEmployeeLogin={() => setShowEmployeeLoginDuringClosed(true)}
         />
       ) : !activeCustomer && !isAdminMode ? (
         <WelcomeOrderPortal
           customers={customers}
-          onEmployeeVerified={(emp) => {
-            setShowEmployeeLoginDuringClosed(false);
-            handleEmployeeVerified(emp);
-          }}
-          onRegisterNewEmployee={(newEmp) => {
-            setShowEmployeeLoginDuringClosed(false);
-            handleRegisterNewEmployee(newEmp);
-          }}
-          onSelectGuest={(guestName) => {
-            setShowEmployeeLoginDuringClosed(false);
-            handleSelectGuest(guestName);
-          }}
+          onEmployeeVerified={(emp) => handleEmployeeVerified(emp)}
+          onRegisterNewEmployee={(newEmp) => handleRegisterNewEmployee(newEmp)}
+          onSelectGuest={(guestName) => handleSelectGuest(guestName)}
           onSwitchToAdmin={() => setIsAdminMode(true)}
           onVerifyEmployeeCloud={handleVerifyEmployeeCloud}
         />
       ) : (
         <>
-          {/* Informational off-hours banner for logged-in employees viewing outside 8:00 AM - 3:30 PM */}
-          {!isAdminMode && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() && (
-            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs font-bold text-amber-900 text-center flex items-center justify-center gap-2">
-              <span>⏰ تنبيه: البوفية مغلق حالياً (مواعيد العمل: من الأحد إلى الخميس من 8:00 ص حتى 3:30 م). استعراض الأصناف والحساب متاح، وتُستقبل الطلبات بدءاً من الساعة 8:00 صباحاً.</span>
-            </div>
-          )}
           {/* App Header with Tabs & Sheet Status */}
           <Header
             activeTab={activeTab}

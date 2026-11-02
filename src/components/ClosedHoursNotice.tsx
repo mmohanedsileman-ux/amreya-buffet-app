@@ -6,10 +6,9 @@ import { getAdminSecurityStatus, recordFailedPinAttempt, resetFailedPinAttempts 
 
 interface ClosedHoursNoticeProps {
   onSwitchToAdmin: () => void;
-  onOpenEmployeeLogin?: () => void;
 }
 
-export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchToAdmin, onOpenEmployeeLogin }) => {
+export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchToAdmin }) => {
   const [showAdminPinPrompt, setShowAdminPinPrompt] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -112,19 +111,8 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
             </p>
           </div>
 
-          {/* Employee & Admin Access */}
+          {/* Admin / Cashier Access Only */}
           <div className="pt-2 flex flex-col gap-2.5">
-            {onOpenEmployeeLogin && !showAdminPinPrompt && (
-              <button
-                type="button"
-                onClick={onOpenEmployeeLogin}
-                className="w-full bg-[#172338] hover:bg-[#243553] text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
-              >
-                <Coffee className="w-4 h-4 text-amber-300" />
-                <span>دخول حساب موظف (استعراض الحساب والمنيو)</span>
-              </button>
-            )}
-
             {!showAdminPinPrompt ? (
               <button
                 type="button"
