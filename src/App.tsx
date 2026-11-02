@@ -715,12 +715,13 @@ export default function App() {
             const liveOrdersRemainingDebt = myOrders.reduce((sum: number, o: Order) => sum + (o.remainingAmount || 0), 0);
 
             // Determine authoritative debt:
-            // Synchronized strictly from صفحة «المديونيات» في الشيت
+            // Synchronized strictly from official sheet ledger (أرصدة ومديونيات العملاء)
             let newDebt = 0;
-            if (foundDebtKeyMatch) {
+            if (sheetMatch && sheetMatch.remainingDebt !== undefined) {
+              newDebt = Math.max(0, Number(sheetMatch.remainingDebt) || 0);
+            } else if (foundDebtKeyMatch) {
               newDebt = totalMatchedDebtFromKey;
             } else {
-              // Not in صفحة المديونيات -> 0 debt (مسدد بالكامل)
               newDebt = 0;
             }
 

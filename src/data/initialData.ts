@@ -2,33 +2,18 @@ import { Customer, MenuItem, Order, PaymentTransaction } from "../types";
 
 export const INITIAL_CUSTOMERS: Customer[] = [
   {
-    "id": "CUST-1000",
-    "code": "1000",
+    "id": "CUST-1022",
     "name": "ضيوف - 1000",
+    "code": "1000",
     "category": "ضيوف وإدارة",
-    "department": "إدارة الكافتيريا / الضيافة",
+    "department": "-",
     "phone": "-",
     "totalOrders": 0,
     "totalPaid": 0,
     "remainingDebt": 0,
-    "creditLimit": 10000,
-    "status": "مسدد بالكامل",
-    "notes": "حساب الضيافة والضيوف - كود 1000"
-  },
-  {
-    "id": "CUST-13827",
-    "name": "نادر محمدالسيد - 13827",
-    "code": "13827",
-    "category": "موظف",
-    "department": "إدارة الكافتيريا",
-    "phone": "-",
-    "totalOrders": 410,
-    "totalPaid": 395,
-    "remainingDebt": 15,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13827",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 1000"
   },
   {
     "id": "CUST-1002",
@@ -42,8 +27,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13088",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13088"
   },
   {
     "id": "CUST-1003",
@@ -57,8 +41,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11803",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11803"
   },
   {
     "id": "CUST-1004",
@@ -67,13 +50,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "قسم الصيانة الميكانيكية",
     "phone": "01012345678",
-    "totalOrders": 170,
-    "totalPaid": 160,
-    "remainingDebt": 10,
+    "totalOrders": 225,
+    "totalPaid": 225,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12168",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12168"
   },
   {
     "id": "CUST-1005",
@@ -82,13 +64,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "قسم الإنتاج",
     "phone": "-",
-    "totalOrders": 515,
-    "totalPaid": 30,
-    "remainingDebt": 485,
+    "totalOrders": 570,
+    "totalPaid": 530,
+    "remainingDebt": 40,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 11998",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11998"
   },
   {
     "id": "CUST-1006",
@@ -97,13 +78,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الإدارة والمالية",
     "phone": "-",
-    "totalOrders": 385,
-    "totalPaid": 40,
-    "remainingDebt": 345,
+    "totalOrders": 425,
+    "totalPaid": 425,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12404",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12404"
   },
   {
     "id": "CUST-1007",
@@ -113,12 +93,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "-",
     "phone": "-",
     "totalOrders": 235,
-    "totalPaid": 10,
-    "remainingDebt": 225,
+    "totalPaid": 185,
+    "remainingDebt": 50,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12400",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12400"
   },
   {
     "id": "CUST-1008",
@@ -132,8 +111,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 1007",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 1007"
   },
   {
     "id": "CUST-1009",
@@ -142,13 +120,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 600,
-    "totalPaid": 0,
-    "remainingDebt": 600,
+    "totalOrders": 700,
+    "totalPaid": 645,
+    "remainingDebt": 55,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13066",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13066"
   },
   {
     "id": "CUST-1011",
@@ -157,13 +134,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 295,
-    "totalPaid": 0,
-    "remainingDebt": 295,
+    "totalOrders": 370,
+    "totalPaid": 325,
+    "remainingDebt": 45,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12202",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12202"
   },
   {
     "id": "CUST-1012",
@@ -172,13 +148,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 315,
-    "totalPaid": 0,
-    "remainingDebt": 315,
+    "totalOrders": 365,
+    "totalPaid": 275,
+    "remainingDebt": 90,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 11708",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11708"
   },
   {
     "id": "CUST-1014",
@@ -188,12 +163,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "-",
     "phone": "-",
     "totalOrders": 170,
-    "totalPaid": 0,
-    "remainingDebt": 170,
+    "totalPaid": 120,
+    "remainingDebt": 50,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13296",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13296"
   },
   {
     "id": "CUST-1015",
@@ -202,13 +176,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 390,
-    "totalPaid": 0,
-    "remainingDebt": 390,
+    "totalOrders": 550,
+    "totalPaid": 305,
+    "remainingDebt": 245,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12805",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12805"
   },
   {
     "id": "CUST-1016",
@@ -217,13 +190,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الأمن الإداري",
     "phone": "-",
-    "totalOrders": 250,
-    "totalPaid": 0,
-    "remainingDebt": 250,
+    "totalOrders": 285,
+    "totalPaid": 205,
+    "remainingDebt": 80,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12923",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12923"
   },
   {
     "id": "CUST-1017",
@@ -232,13 +204,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 330,
-    "totalPaid": 0,
-    "remainingDebt": 330,
+    "totalOrders": 360,
+    "totalPaid": 345,
+    "remainingDebt": 15,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13101",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13101"
   },
   {
     "id": "CUST-1018",
@@ -247,13 +218,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 210,
-    "totalPaid": 0,
-    "remainingDebt": 210,
+    "totalOrders": 240,
+    "totalPaid": 240,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12728",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12728"
   },
   {
     "id": "CUST-1019",
@@ -262,13 +232,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "-",
     "phone": "-",
-    "totalOrders": 320,
-    "totalPaid": 10,
-    "remainingDebt": 310,
+    "totalOrders": 400,
+    "totalPaid": 320,
+    "remainingDebt": 80,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12375",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12375"
   },
   {
     "id": "CUST-1020",
@@ -278,12 +247,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "-",
     "phone": "-",
     "totalOrders": 150,
-    "totalPaid": 0,
-    "remainingDebt": 150,
+    "totalPaid": 150,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12661",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12661"
   },
   {
     "id": "CUST-1021",
@@ -292,13 +260,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشئون الادارية",
     "phone": "01198765432",
-    "totalOrders": 80,
+    "totalOrders": 105,
     "totalPaid": 0,
-    "remainingDebt": 80,
+    "remainingDebt": 105,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 1002",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 1002"
   },
   {
     "id": "CUST-1023",
@@ -312,8 +279,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13466",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13466"
   },
   {
     "id": "CUST-1024",
@@ -327,8 +293,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12505",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12505"
   },
   {
     "id": "CUST-1025",
@@ -337,13 +302,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الأمن الإداري",
     "phone": "01014516204",
-    "totalOrders": 0,
+    "totalOrders": 40,
     "totalPaid": 0,
-    "remainingDebt": 0,
+    "remainingDebt": 40,
     "creditLimit": 500,
-    "status": "مسدد بالكامل",
-    "notes": "كود موظف 12022",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مدين",
+    "notes": "كود موظف 12022"
   },
   {
     "id": "CUST-1026",
@@ -357,8 +321,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13246",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13246"
   },
   {
     "id": "CUST-1027",
@@ -367,13 +330,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الارشيف",
     "phone": "-",
-    "totalOrders": 315,
-    "totalPaid": 295,
-    "remainingDebt": 20,
+    "totalOrders": 385,
+    "totalPaid": 385,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13891",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 13891"
   },
   {
     "id": "CUST-1028",
@@ -383,12 +345,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "المشتريات والمخازن",
     "phone": "01277930840",
     "totalOrders": 10,
-    "totalPaid": 0,
-    "remainingDebt": 10,
+    "totalPaid": 10,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13263",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 13263"
   },
   {
     "id": "CUST-1029",
@@ -402,8 +363,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11744",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11744"
   },
   {
     "id": "CUST-1030",
@@ -413,12 +373,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "المشتريات والمخازن",
     "phone": "-",
     "totalOrders": 150,
-    "totalPaid": 0,
-    "remainingDebt": 150,
+    "totalPaid": 150,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12501",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12501"
   },
   {
     "id": "CUST-1031",
@@ -426,14 +385,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "14042",
     "category": "موظف",
     "department": "الموارد البشرية (HR)",
-    "phone": "01099993908",
-    "totalOrders": 90,
-    "totalPaid": 0,
-    "remainingDebt": 90,
+    "phone": "201099993908",
+    "totalOrders": 115,
+    "totalPaid": 115,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 14042",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 14042"
   },
   {
     "id": "CUST-1032",
@@ -442,13 +400,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "01005556992",
-    "totalOrders": 335,
-    "totalPaid": 0,
-    "remainingDebt": 335,
+    "totalOrders": 405,
+    "totalPaid": 320,
+    "remainingDebt": 85,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 14040",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 14040"
   },
   {
     "id": "CUST-1033",
@@ -457,13 +414,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "01080867958",
-    "totalOrders": 205,
+    "totalOrders": 240,
     "totalPaid": 60,
-    "remainingDebt": 145,
+    "remainingDebt": 180,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12660",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12660"
   },
   {
     "id": "CUST-1034",
@@ -472,13 +428,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "المشتريات والمخازن",
     "phone": "-",
-    "totalOrders": 335,
-    "totalPaid": 0,
-    "remainingDebt": 335,
+    "totalOrders": 375,
+    "totalPaid": 345,
+    "remainingDebt": 30,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 14076",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 14076"
   },
   {
     "id": "CUST-1035",
@@ -492,8 +447,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13283",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13283"
   },
   {
     "id": "CUST-1036",
@@ -502,13 +456,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "010",
-    "totalOrders": 185,
-    "totalPaid": 0,
-    "remainingDebt": 185,
+    "totalOrders": 195,
+    "totalPaid": 180,
+    "remainingDebt": 15,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0000",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 0000"
   },
   {
     "id": "CUST-1038",
@@ -516,14 +469,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "13578",
     "category": "موظف",
     "department": "المشتريات والمخازن",
-    "phone": "01097343300",
-    "totalOrders": 190,
-    "totalPaid": 40,
-    "remainingDebt": 150,
+    "phone": "201097343300",
+    "totalOrders": 255,
+    "totalPaid": 220,
+    "remainingDebt": 35,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13578",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13578"
   },
   {
     "id": "CUST-1039",
@@ -531,14 +483,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "1911",
     "category": "موظف",
     "department": "الشؤون الإدارية",
-    "phone": "01036701646",
+    "phone": "201036701646",
     "totalOrders": 85,
     "totalPaid": 20,
     "remainingDebt": 65,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 1911",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 1911"
   },
   {
     "id": "CUST-1040",
@@ -548,12 +499,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "المشتريات والمخازن",
     "phone": "01011362148",
     "totalOrders": 50,
-    "totalPaid": 10,
-    "remainingDebt": 40,
+    "totalPaid": 50,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13688",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 13688"
   },
   {
     "id": "CUST-1041",
@@ -562,13 +512,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الموارد البشرية (HR)",
     "phone": "01068132181",
-    "totalOrders": 210,
-    "totalPaid": 45,
-    "remainingDebt": 165,
+    "totalOrders": 275,
+    "totalPaid": 165,
+    "remainingDebt": 110,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13660",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13660"
   },
   {
     "id": "CUST-1042",
@@ -582,8 +531,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12271",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12271"
   },
   {
     "id": "CUST-1043",
@@ -592,13 +540,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشئون الادارية",
     "phone": "01007612599",
-    "totalOrders": 145,
-    "totalPaid": 10,
-    "remainingDebt": 135,
+    "totalOrders": 200,
+    "totalPaid": 145,
+    "remainingDebt": 55,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13399",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13399"
   },
   {
     "id": "CUST-1044",
@@ -612,8 +559,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 235,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 11703",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11703"
   },
   {
     "id": "CUST-1045",
@@ -627,8 +573,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11987",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11987"
   },
   {
     "id": "CUST-1046",
@@ -642,8 +587,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11688",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 11688"
   },
   {
     "id": "CUST-1047",
@@ -653,12 +597,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "ادمن",
     "phone": "-",
     "totalOrders": 200,
-    "totalPaid": 20,
-    "remainingDebt": 180,
+    "totalPaid": 120,
+    "remainingDebt": 80,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 1100",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 1100"
   },
   {
     "id": "CUST-1048",
@@ -672,8 +615,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 25,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12110",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12110"
   },
   {
     "id": "CUST-1049",
@@ -681,14 +623,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "12000",
     "category": "موظف",
     "department": "الشؤون الإدارية",
-    "phone": "01055670030",
+    "phone": "201055670030",
     "totalOrders": 40,
-    "totalPaid": 0,
-    "remainingDebt": 40,
+    "totalPaid": 40,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12000",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12000"
   },
   {
     "id": "CUST-1050",
@@ -698,12 +639,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "ادمن",
     "phone": "-",
     "totalOrders": 40,
-    "totalPaid": 0,
-    "remainingDebt": 40,
+    "totalPaid": 40,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 0055",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 0055"
   },
   {
     "id": "CUST-1051",
@@ -717,8 +657,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12906",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12906"
   },
   {
     "id": "CUST-1052",
@@ -726,14 +665,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "0044",
     "category": "موظف",
     "department": "الشؤون الإدارية",
-    "phone": "٠١٢٠٢٥٣٨٠٩٠",
-    "totalOrders": 235,
-    "totalPaid": 0,
-    "remainingDebt": 235,
+    "phone": "201202538090",
+    "totalOrders": 280,
+    "totalPaid": 200,
+    "remainingDebt": 80,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0044",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 0044"
   },
   {
     "id": "CUST-1053",
@@ -747,8 +685,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 30,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13655",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13655"
   },
   {
     "id": "CUST-1054",
@@ -758,12 +695,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "الإدارة والمالية",
     "phone": "-",
     "totalOrders": 80,
-    "totalPaid": 80,
-    "remainingDebt": 0,
+    "totalPaid": 90,
+    "remainingDebt": -10,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12720",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12720"
   },
   {
     "id": "CUST-1055",
@@ -772,13 +708,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "-",
-    "totalOrders": 155,
+    "totalOrders": 175,
     "totalPaid": 0,
-    "remainingDebt": 155,
+    "remainingDebt": 175,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12082",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 12082"
   },
   {
     "id": "CUST-1056",
@@ -788,12 +723,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "قسم الإنتاج",
     "phone": "-",
     "totalOrders": 45,
-    "totalPaid": 0,
-    "remainingDebt": 45,
+    "totalPaid": 45,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 11921",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 11921"
   },
   {
     "id": "CUST-1057",
@@ -802,13 +736,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "OCC",
     "phone": "-",
-    "totalOrders": 60,
-    "totalPaid": 0,
-    "remainingDebt": 60,
+    "totalOrders": 100,
+    "totalPaid": 100,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12729",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12729"
   },
   {
     "id": "CUST-1058",
@@ -822,8 +755,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 100,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0077",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 0077"
   },
   {
     "id": "CUST-1059",
@@ -831,14 +763,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "13412",
     "category": "موظف",
     "department": "المشتريات والمخازن",
-    "phone": "01000526414",
-    "totalOrders": 110,
+    "phone": "201000526414",
+    "totalOrders": 130,
     "totalPaid": 25,
-    "remainingDebt": 85,
+    "remainingDebt": 105,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13412",
-    "lastActivity": "2026-10-28T14:41:27.220Z"
+    "notes": "كود موظف 13412"
   },
   {
     "id": "CUST-1060",
@@ -846,14 +777,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "13827",
     "category": "موظف",
     "department": "الشؤون الإدارية",
-    "phone": "01097736984",
+    "phone": "-",
     "totalOrders": 410,
     "totalPaid": 395,
     "remainingDebt": 15,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13827 - مديونية 15 ج.م (صفحة المديونيات)",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "notes": "كود موظف 13827"
   },
   {
     "id": "CUST-1061",
@@ -867,8 +797,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 45,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13831",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "notes": "كود موظف 13831"
   },
   {
     "id": "CUST-1062",
@@ -877,13 +806,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "اللوجستكس",
     "phone": "-",
-    "totalOrders": 130,
-    "totalPaid": 85,
-    "remainingDebt": 45,
+    "totalOrders": 145,
+    "totalPaid": 145,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12637",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12637"
   },
   {
     "id": "CUST-1063",
@@ -897,8 +825,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 20,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 11685",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "notes": "كود موظف 11685"
   },
   {
     "id": "CUST-1064",
@@ -912,8 +839,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 0033",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "notes": "كود موظف 0033"
   },
   {
     "id": "CUST-1065",
@@ -923,12 +849,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "المشتريات والمخازن",
     "phone": "-",
     "totalOrders": 55,
-    "totalPaid": 10,
-    "remainingDebt": 45,
+    "totalPaid": 55,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13090",
-    "lastActivity": "2026-10-28T14:41:27.221Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 13090"
   },
   {
     "id": "CUST-1066",
@@ -942,8 +867,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13579",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 13579"
   },
   {
     "id": "CUST-1067",
@@ -951,14 +875,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "12802",
     "category": "موظف",
     "department": "اللوجستكس",
-    "phone": "01277169879",
-    "totalOrders": 235,
-    "totalPaid": 140,
-    "remainingDebt": 95,
+    "phone": "201277169879",
+    "totalOrders": 270,
+    "totalPaid": 270,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 12802",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 12802"
   },
   {
     "id": "CUST-1068",
@@ -972,8 +895,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 14374",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 14374"
   },
   {
     "id": "CUST-1069",
@@ -987,8 +909,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 45,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 16313",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 16313"
   },
   {
     "id": "CUST-1070",
@@ -997,13 +918,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الموارد البشرية (HR)",
     "phone": "-",
-    "totalOrders": 40,
+    "totalOrders": 50,
     "totalPaid": 10,
-    "remainingDebt": 30,
+    "remainingDebt": 40,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13659",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 13659"
   },
   {
     "id": "CUST-1071",
@@ -1012,13 +932,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "إدارة الأمن",
     "phone": "-",
-    "totalOrders": 40,
+    "totalOrders": 60,
     "totalPaid": 0,
-    "remainingDebt": 40,
+    "remainingDebt": 60,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 11662",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 11662"
   },
   {
     "id": "CUST-1072",
@@ -1032,8 +951,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 25,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12733",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 12733"
   },
   {
     "id": "CUST-1073",
@@ -1042,13 +960,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "-",
-    "totalOrders": 50,
-    "totalPaid": 0,
-    "remainingDebt": 50,
+    "totalOrders": 80,
+    "totalPaid": 10,
+    "remainingDebt": 70,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12048",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 12048"
   },
   {
     "id": "CUST-1074",
@@ -1057,13 +974,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "-",
-    "totalOrders": 150,
-    "totalPaid": 55,
+    "totalOrders": 200,
+    "totalPaid": 105,
     "remainingDebt": 95,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0088",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 0088"
   },
   {
     "id": "CUST-1075",
@@ -1073,12 +989,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "المشتريات والمخازن",
     "phone": "٠١٠٢٨٥٩٨٢٥٣",
     "totalOrders": 170,
-    "totalPaid": 145,
-    "remainingDebt": 25,
+    "totalPaid": 170,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 11470",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 11470"
   },
   {
     "id": "CUST-1076",
@@ -1086,14 +1001,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "0200",
     "category": "موظف",
     "department": "الشؤون الإدارية",
-    "phone": "01055670030",
-    "totalOrders": 135,
-    "totalPaid": 0,
-    "remainingDebt": 135,
+    "phone": "201055670030",
+    "totalOrders": 175,
+    "totalPaid": 135,
+    "remainingDebt": 40,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0200",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 0200"
   },
   {
     "id": "CUST-1077",
@@ -1102,13 +1016,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "المشتريات والمخازن",
     "phone": "01000751598",
-    "totalOrders": 140,
-    "totalPaid": 0,
-    "remainingDebt": 140,
+    "totalOrders": 160,
+    "totalPaid": 80,
+    "remainingDebt": 80,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13548",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 13548"
   },
   {
     "id": "CUST-1078",
@@ -1117,13 +1030,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "01060514561",
-    "totalOrders": 70,
+    "totalOrders": 105,
     "totalPaid": 0,
-    "remainingDebt": 70,
+    "remainingDebt": 105,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13159",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 13159"
   },
   {
     "id": "CUST-1079",
@@ -1137,8 +1049,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 30,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12318",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 12318"
   },
   {
     "id": "CUST-1080",
@@ -1152,8 +1063,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 81729",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 81729"
   },
   {
     "id": "CUST-1081",
@@ -1163,12 +1073,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "الشؤون الإدارية",
     "phone": "-",
     "totalOrders": 60,
-    "totalPaid": 40,
-    "remainingDebt": 20,
+    "totalPaid": 60,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 13845",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 13845"
   },
   {
     "id": "CUST-1082",
@@ -1178,12 +1087,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "OCC",
     "phone": "-",
     "totalOrders": 145,
-    "totalPaid": 0,
-    "remainingDebt": 145,
+    "totalPaid": 145,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 11233",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 11233"
   },
   {
     "id": "CUST-11859",
@@ -1197,8 +1105,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11859",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 11859"
   },
   {
     "id": "CUST-14398",
@@ -1207,13 +1114,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الإدارة المالية",
     "phone": "01152308223",
-    "totalOrders": 25,
-    "totalPaid": 0,
-    "remainingDebt": 25,
+    "totalOrders": 85,
+    "totalPaid": 55,
+    "remainingDebt": 30,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 14398",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 14398"
   },
   {
     "id": "CUST-12183",
@@ -1227,8 +1133,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12183",
-    "lastActivity": "2026-10-28T14:41:27.222Z"
+    "notes": "كود موظف 12183"
   },
   {
     "id": "CUST-12227",
@@ -1242,8 +1147,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12227",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12227"
   },
   {
     "id": "CUST-11895",
@@ -1257,8 +1161,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11895",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 11895"
   },
   {
     "id": "CUST-13617",
@@ -1272,8 +1175,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13617",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13617"
   },
   {
     "id": "CUST-12121",
@@ -1287,8 +1189,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12121",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12121"
   },
   {
     "id": "CUST-13030",
@@ -1302,8 +1203,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13030",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13030"
   },
   {
     "id": "CUST-12331",
@@ -1317,8 +1217,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 20,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 12331",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12331"
   },
   {
     "id": "CUST-12184",
@@ -1332,8 +1231,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12184",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12184"
   },
   {
     "id": "CUST-13747",
@@ -1342,13 +1240,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "المشتريات والمخازن",
     "phone": "-",
-    "totalOrders": 10,
+    "totalOrders": 30,
     "totalPaid": 0,
-    "remainingDebt": 10,
+    "remainingDebt": 30,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 13747",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13747"
   },
   {
     "id": "CUST-0011",
@@ -1362,8 +1259,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 35,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0011",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 0011"
   },
   {
     "id": "CUST-0066",
@@ -1373,12 +1269,11 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "department": "الشؤون الإدارية",
     "phone": "-",
     "totalOrders": 30,
-    "totalPaid": 0,
-    "remainingDebt": 30,
+    "totalPaid": 30,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 0066",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 0066"
   },
   {
     "id": "CUST-12500",
@@ -1392,8 +1287,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12500",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12500"
   },
   {
     "id": "CUST-12353",
@@ -1407,8 +1301,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12353",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12353"
   },
   {
     "id": "CUST-12270",
@@ -1417,13 +1310,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الجودة والمختبر",
     "phone": "-",
-    "totalOrders": 10,
-    "totalPaid": 10,
+    "totalOrders": 60,
+    "totalPaid": 60,
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12270",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12270"
   },
   {
     "id": "CUST-12200",
@@ -1437,8 +1329,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12200",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12200"
   },
   {
     "id": "CUST-0099",
@@ -1447,13 +1338,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "الشؤون الإدارية",
     "phone": "-",
-    "totalOrders": 30,
+    "totalOrders": 60,
     "totalPaid": 0,
-    "remainingDebt": 30,
+    "remainingDebt": 60,
     "creditLimit": 500,
     "status": "مدين",
-    "notes": "كود موظف 0099",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 0099"
   },
   {
     "id": "CUST-13157",
@@ -1467,8 +1357,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13157",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13157"
   },
   {
     "id": "CUST-12282",
@@ -1476,14 +1365,13 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "code": "12282",
     "category": "موظف",
     "department": "قسم الإنتاج",
-    "phone": "01201753829",
+    "phone": "201201753829",
     "totalOrders": 50,
-    "totalPaid": 50,
-    "remainingDebt": 0,
+    "totalPaid": 0,
+    "remainingDebt": 50,
     "creditLimit": 500,
-    "status": "مسدد بالكامل",
-    "notes": "كود موظف 12282",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "status": "مدين",
+    "notes": "كود موظف 12282"
   },
   {
     "id": "CUST-13094",
@@ -1497,8 +1385,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13094",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13094"
   },
   {
     "id": "CUST-11745",
@@ -1507,13 +1394,12 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "category": "موظف",
     "department": "إدارة الأمن",
     "phone": "01008062835",
-    "totalOrders": 40,
-    "totalPaid": 0,
-    "remainingDebt": 40,
+    "totalOrders": 70,
+    "totalPaid": 70,
+    "remainingDebt": 0,
     "creditLimit": 500,
-    "status": "مدين",
-    "notes": "كود موظف 11745",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "status": "مسدد بالكامل",
+    "notes": "كود موظف 11745"
   },
   {
     "id": "CUST-12173",
@@ -1527,8 +1413,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12173",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12173"
   },
   {
     "id": "CUST-13467",
@@ -1542,8 +1427,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 13467",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 13467"
   },
   {
     "id": "CUST-12770",
@@ -1557,8 +1441,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12770",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12770"
   },
   {
     "id": "CUST-11954",
@@ -1572,8 +1455,7 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 11954",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 11954"
   },
   {
     "id": "CUST-12844",
@@ -1587,8 +1469,21 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "remainingDebt": 0,
     "creditLimit": 500,
     "status": "مسدد بالكامل",
-    "notes": "كود موظف 12844",
-    "lastActivity": "2026-10-28T14:41:27.223Z"
+    "notes": "كود موظف 12844"
+  },
+  {
+    "id": "CUST-61220",
+    "name": "محمد عبدالكريم - 61220",
+    "code": "61220",
+    "category": "موظف",
+    "department": "العمران",
+    "phone": "-",
+    "totalOrders": 30,
+    "totalPaid": 0,
+    "remainingDebt": 30,
+    "creditLimit": 500,
+    "status": "مدين",
+    "notes": "كود موظف 61220"
   }
 ];
 
