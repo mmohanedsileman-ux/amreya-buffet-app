@@ -85,20 +85,6 @@ import {
 } from './services/syncQueue';
 import { normalizeDigits, isCorrectAdminPin, resetFailedPinAttempts } from './utils/security';
 
-// One-time automatic refresh of debts data for updated debts sheet & stale session cleanup
-const OFFICIAL_LAUNCH_KEY = 'amreyah_buffet_launch_v3_reconciled';
-if (typeof window !== 'undefined' && localStorage.getItem(OFFICIAL_LAUNCH_KEY) !== 'ready') {
-  try {
-    localStorage.removeItem('cafe_orders_data');
-    localStorage.removeItem('cafe_orders_data_v2');
-    localStorage.removeItem('cafe_txns_data');
-    localStorage.removeItem('cafe_customers_data');
-    localStorage.removeItem('cafe_active_customer_id');
-    sessionStorage.removeItem('cafe_active_customer_id');
-    localStorage.setItem(OFFICIAL_LAUNCH_KEY, 'ready');
-  } catch {}
-}
-
 function deduplicateOrderList(orderList: Order[]): Order[] {
   const seenIds = new Set<string>();
   return (orderList || []).filter(o => {
@@ -114,12 +100,22 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
       const saved = localStorage.getItem('cafe_customers_data');
+      let baseList = INITIAL_CUSTOMERS;
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return mergeCustomersFromSheet(parsed, INITIAL_CUSTOMERS);
+          baseList = mergeCustomersFromSheet(parsed, INITIAL_CUSTOMERS);
         }
       }
+      // Guarantee currently logged-in customer is present from frame 1 so page refresh never drops session
+      const activeObjRaw = localStorage.getItem('cafe_active_customer_obj') || sessionStorage.getItem('cafe_active_customer_obj');
+      if (activeObjRaw) {
+        const activeCust = JSON.parse(activeObjRaw);
+        if (activeCust && activeCust.id && !baseList.some(c => c.id === activeCust.id || (activeCust.code && c.code === activeCust.code))) {
+          baseList = [activeCust, ...baseList];
+        }
+      }
+      return baseList;
     } catch {}
     return INITIAL_CUSTOMERS;
   });
@@ -202,8 +198,36 @@ export default function App() {
     return null;
   });
 
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
+  // Admin / Cashier Mode Session Persistence
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('mode') === 'admin' || params.get('admin') === 'true') {
+          return true;
+        }
+      }
+      return localStorage.getItem('cafe_is_admin_mode') === 'true' || sessionStorage.getItem('cafe_is_admin_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [showEmployeeLoginDuringClosed, setShowEmployeeLoginDuringClosed] = useState(false);
   const [isCustomerSettleOpen, setIsCustomerSettleOpen] = useState(false);
+
+  // Synchronize admin mode across page reloads
+  useEffect(() => {
+    try {
+      if (isAdminMode) {
+        localStorage.setItem('cafe_is_admin_mode', 'true');
+        sessionStorage.setItem('cafe_is_admin_mode', 'true');
+      } else {
+        localStorage.removeItem('cafe_is_admin_mode');
+        sessionStorage.removeItem('cafe_is_admin_mode');
+      }
+    } catch {}
+  }, [isAdminMode]);
 
   // Computed Active Customer (matched strictly by employee code, exact ID, or persistent session cache)
   const activeCustomer = useMemo<Customer | null>(() => {
@@ -1509,9 +1533,11 @@ export default function App() {
       localStorage.removeItem('cafe_active_customer_id');
       localStorage.removeItem('cafe_active_customer_code');
       localStorage.removeItem('cafe_active_customer_obj');
+      localStorage.removeItem('cafe_is_admin_mode');
       sessionStorage.removeItem('cafe_active_customer_id');
       sessionStorage.removeItem('cafe_active_customer_code');
       sessionStorage.removeItem('cafe_active_customer_obj');
+      sessionStorage.removeItem('cafe_is_admin_mode');
     } catch {}
   }, []);
 
@@ -1750,22 +1776,39 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fcfbf9] text-[#1e1b18]">
-      {/* Outside official working hours (8:00 AM - 3:30 PM, or Friday & Saturday weekend): Show Closed Notice */}
-      {!isAdminMode && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() ? (
+      {/* Outside official working hours (8:00 AM - 3:30 PM, or Friday & Saturday weekend): 
+          Show Closed Notice ONLY to unauthenticated visitors who have no active employee or admin session */}
+      {!isAdminMode && !activeCustomer && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() && !showEmployeeLoginDuringClosed ? (
         <ClosedHoursNotice 
           onSwitchToAdmin={() => setIsAdminMode(true)} 
+          onOpenEmployeeLogin={() => setShowEmployeeLoginDuringClosed(true)}
         />
       ) : !activeCustomer && !isAdminMode ? (
         <WelcomeOrderPortal
           customers={customers}
-          onEmployeeVerified={handleEmployeeVerified}
-          onRegisterNewEmployee={handleRegisterNewEmployee}
-          onSelectGuest={handleSelectGuest}
+          onEmployeeVerified={(emp) => {
+            setShowEmployeeLoginDuringClosed(false);
+            handleEmployeeVerified(emp);
+          }}
+          onRegisterNewEmployee={(newEmp) => {
+            setShowEmployeeLoginDuringClosed(false);
+            handleRegisterNewEmployee(newEmp);
+          }}
+          onSelectGuest={(guestName) => {
+            setShowEmployeeLoginDuringClosed(false);
+            handleSelectGuest(guestName);
+          }}
           onSwitchToAdmin={() => setIsAdminMode(true)}
           onVerifyEmployeeCloud={handleVerifyEmployeeCloud}
         />
       ) : (
         <>
+          {/* Informational off-hours banner for logged-in employees viewing outside 8:00 AM - 3:30 PM */}
+          {!isAdminMode && isWorkingHoursEnforced() && !isCurrentTimeWithinHours() && (
+            <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs font-bold text-amber-900 text-center flex items-center justify-center gap-2">
+              <span>⏰ تنبيه: البوفية مغلق حالياً (مواعيد العمل: من الأحد إلى الخميس من 8:00 ص حتى 3:30 م). استعراض الأصناف والحساب متاح، وتُستقبل الطلبات بدءاً من الساعة 8:00 صباحاً.</span>
+            </div>
+          )}
           {/* App Header with Tabs & Sheet Status */}
           <Header
             activeTab={activeTab}

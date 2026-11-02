@@ -16,6 +16,21 @@ export const INITIAL_CUSTOMERS: Customer[] = [
     "notes": "حساب الضيافة والضيوف - كود 1000"
   },
   {
+    "id": "CUST-13827",
+    "name": "نادر محمدالسيد - 13827",
+    "code": "13827",
+    "category": "موظف",
+    "department": "إدارة الكافتيريا",
+    "phone": "-",
+    "totalOrders": 410,
+    "totalPaid": 395,
+    "remainingDebt": 15,
+    "creditLimit": 500,
+    "status": "مدين",
+    "notes": "كود موظف 13827",
+    "lastActivity": "2026-10-28T14:41:27.220Z"
+  },
+  {
     "id": "CUST-1002",
     "name": "محمود محمد رجب - 13088",
     "code": "13088",

@@ -6,9 +6,10 @@ import { getAdminSecurityStatus, recordFailedPinAttempt, resetFailedPinAttempts 
 
 interface ClosedHoursNoticeProps {
   onSwitchToAdmin: () => void;
+  onOpenEmployeeLogin?: () => void;
 }
 
-export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchToAdmin }) => {
+export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchToAdmin, onOpenEmployeeLogin }) => {
   const [showAdminPinPrompt, setShowAdminPinPrompt] = useState(false);
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
@@ -111,8 +112,19 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
             </p>
           </div>
 
-          {/* Admin Access */}
+          {/* Employee & Admin Access */}
           <div className="pt-2 flex flex-col gap-2.5">
+            {onOpenEmployeeLogin && !showAdminPinPrompt && (
+              <button
+                type="button"
+                onClick={onOpenEmployeeLogin}
+                className="w-full bg-[#172338] hover:bg-[#243553] text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+              >
+                <Coffee className="w-4 h-4 text-amber-300" />
+                <span>دخول حساب موظف (استعراض الحساب والمنيو)</span>
+              </button>
+            )}
+
             {!showAdminPinPrompt ? (
               <button
                 type="button"
@@ -120,7 +132,7 @@ export const ClosedHoursNotice: React.FC<ClosedHoursNoticeProps> = ({ onSwitchTo
                 className="text-xs text-[#8c7f70] hover:text-[#26201b] font-bold flex items-center justify-center gap-1.5 mx-auto transition-colors cursor-pointer py-1.5 px-3 rounded-xl hover:bg-[#f0ebe3]"
               >
                 <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                <span>دخول الإدارة / الكاشير</span>
+                <span>دخول الإدارة / الكاشير (رمز PIN)</span>
               </button>
             ) : (
               <form onSubmit={handlePinSubmit} className="space-y-3 bg-[#faf7f2] p-4 rounded-2xl border border-[#ded5c7]">
