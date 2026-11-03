@@ -915,57 +915,89 @@ export async function appendOrderViaWebhook(
   webhookUrl: string = getStoredWebhookUrl(),
   targetSpreadsheetId?: string
 ): Promise<boolean> {
-  if (!webhookUrl || !webhookUrl.startsWith('https://script.google.com/')) return false;
   const orderCode = order.id?.startsWith('ORD-') ? order.id : `ORD-${order.orderNumber}`;
   const synced = getSyncedOrderIds();
   if (synced.has(order.id) || synced.has(String(order.orderNumber)) || synced.has(orderCode)) {
     return true; // Already synced, avoid duplication
   }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const row = formatOrderToSheetRow(order, customer);
+  const sheetId = targetSpreadsheetId || localStorage.getItem('cafe_spreadsheet_id') || DEFAULT_SPREADSHEET_ID;
 
+  const payload = {
+    type: 'order',
+    sheetName: ORDERS_SHEET_NAME,
+    targetSheet: ORDERS_SHEET_NAME,
+    sheet: ORDERS_SHEET_NAME,
+    tabName: ORDERS_SHEET_NAME,
+    row,
+    orderId: orderCode,
+    customerName: String(row[2]),
+    items: order.items.map(it => `${it.name} × ${it.quantity}`).join('، '),
+    total: row[4],
+    paymentMethod: row[5],
+    paymentStatus: row[6],
+    notes: row[7] || '',
+    spreadsheetId: sheetId,
+  };
+
+  // Tier 1: Dedicated Serverless backend proxy (/api/submit_order)
+  // Same-origin HTTPS POST completely eliminates mobile browser CORS issues,
+  // carrier firewalls, and iOS/Android 302 cross-domain redirect drops!
   try {
-    const row = formatOrderToSheetRow(order, customer);
-    const sheetId = targetSpreadsheetId || localStorage.getItem('cafe_spreadsheet_id') || DEFAULT_SPREADSHEET_ID;
-
-    // Using text/plain mode: no-cors for Google Apps Script Web App
-    await fetch(webhookUrl, {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const proxyRes = await fetch('/api/submit_order', {
       method: 'POST',
-      mode: 'no-cors',
-      keepalive: true,
-      signal: controller.signal,
       headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        type: 'order',
-        sheetName: ORDERS_SHEET_NAME,
-        targetSheet: ORDERS_SHEET_NAME,
-        sheet: ORDERS_SHEET_NAME,
-        tabName: ORDERS_SHEET_NAME,
-        row,
-        orderId: orderCode,
-        customerName: String(row[2]),
-        items: order.items.map(it => `${it.name} × ${it.quantity}`).join('، '),
-        total: row[4],
-        paymentMethod: row[5],
-        paymentStatus: row[6],
-        notes: row[7] || '',
-        spreadsheetId: sheetId,
-      }),
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+      keepalive: true,
     });
-
-    markOrderAsSynced(order.id);
-    markOrderAsSynced(String(order.orderNumber));
-    markOrderAsSynced(orderCode);
-    return true;
-  } catch (err) {
-    console.warn('Webhook transmission notice:', err);
-    return false;
-  } finally {
     clearTimeout(timeoutId);
+
+    if (proxyRes.ok) {
+      const data = await proxyRes.json();
+      if (data && data.success) {
+        markOrderAsSynced(order.id);
+        markOrderAsSynced(String(order.orderNumber));
+        markOrderAsSynced(orderCode);
+        return true;
+      }
+    }
+  } catch (proxyErr) {
+    console.warn('Proxy /api/submit_order note:', proxyErr);
   }
+
+  // Tier 2: Direct Google Apps Script Webhook fallback (text/plain mode: no-cors with keepalive)
+  if (webhookUrl && webhookUrl.startsWith('https://script.google.com/')) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      await fetch(webhookUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        keepalive: true,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify(payload),
+      });
+      clearTimeout(timeoutId);
+
+      markOrderAsSynced(order.id);
+      markOrderAsSynced(String(order.orderNumber));
+      markOrderAsSynced(orderCode);
+      return true;
+    } catch (err) {
+      console.warn('Direct webhook transmission error:', err);
+    }
+  }
+
+  return false;
 }
 
 export interface DebtSyncResult {

@@ -1,5 +1,4 @@
-import React from 'react';
-import { X, CheckCircle2 } from 'lucide-react';
+import { X, CheckCircle2, RefreshCw, AlertCircle, Clock } from 'lucide-react';
 import { Order } from '../types';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { AmreyahBuffetLogo } from './AmreyahBuffetLogo';
@@ -8,12 +7,16 @@ interface ReceiptModalProps {
   order: Order | null;
   onClose: () => void;
   onNewOrderForAnotherEmployee?: () => void;
+  syncStatus?: 'syncing' | 'synced' | 'failed';
+  onRetrySync?: (order: Order) => void;
 }
 
 export const ReceiptModal: React.FC<ReceiptModalProps> = ({ 
   order, 
   onClose,
   onNewOrderForAnotherEmployee,
+  syncStatus = 'synced',
+  onRetrySync,
 }) => {
   if (!order) return null;
 
@@ -146,12 +149,41 @@ export const ReceiptModal: React.FC<ReceiptModalProps> = ({
           </div>
         </div>
 
-        {/* Modal Close Action Button */}
+        {/* Modal Close Action Button & Real-time Sheet Sync Badge */}
         <div className="pt-2 print:hidden space-y-2">
-          <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 py-2 px-3 rounded-xl border border-emerald-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>تم إتمام وتسجيل الطلب بنجاح</span>
-          </div>
+          {/* Live Sheet Sync Status */}
+          {syncStatus === 'syncing' && (
+            <div className="flex items-center justify-center gap-2 text-xs font-bold text-amber-900 bg-amber-50 py-2.5 px-3 rounded-xl border border-amber-300 animate-pulse">
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 animate-spin" />
+              <span>جاري تأكيد إرسال الطلب... ⏳</span>
+            </div>
+          )}
+
+          {syncStatus === 'synced' && (
+            <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 py-2 px-3 rounded-xl border border-emerald-200">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>تم تأكيد ارسال الطلب بنجاح ✓</span>
+            </div>
+          )}
+
+          {syncStatus === 'failed' && (
+            <div className="flex items-center justify-between gap-2 text-xs font-bold text-rose-900 bg-rose-50 py-2 px-3 rounded-xl border border-rose-200">
+              <div className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="text-[11px]">الطلب محفوظ وسيعاد رفعه تلقائياً</span>
+              </div>
+              {onRetrySync && (
+                <button
+                  type="button"
+                  onClick={() => onRetrySync(order)}
+                  className="bg-rose-700 hover:bg-rose-800 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>إعادة المحاولة</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {onNewOrderForAnotherEmployee && (
             <button

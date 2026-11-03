@@ -68,7 +68,7 @@ export function purgeStuckOldOrdersFromQueue(): void {
 
     const synced = getSyncedOrderIds();
     const now = Date.now();
-    const THREE_MINUTES = 3 * 60 * 1000;
+    const ONE_DAY = 24 * 60 * 60 * 1000;
 
     const cleaned = queue.filter(item => {
       if (item.type === 'order') {
@@ -79,8 +79,8 @@ export function purgeStuckOldOrdersFromQueue(): void {
         if (synced.has(order.id) || synced.has(String(order.orderNumber)) || synced.has(orderCode)) {
           return false;
         }
-        // If older than 3 minutes or failed 2+ times, purge it to avoid sending old orders
-        if (item.attempts >= 2 || (item.addedAt && (now - item.addedAt) > THREE_MINUTES)) {
+        // Keep order in queue for up to 10 attempts over 24 hours to ensure zero lost orders
+        if (item.attempts >= 10 || (item.addedAt && (now - item.addedAt) > ONE_DAY)) {
           return false;
         }
       }
@@ -108,7 +108,7 @@ export function clearOutboxQueue(): void {
 
 /**
  * Transmits an order DIRECTLY and IMMEDIATELY to Google Sheets / Webhook
- * Sent exactly once without ever storing in an outbox queue or grouping old orders!
+ * If network fails or is interrupted on mobile, automatically enqueues for background retry!
  */
 export async function sendOrderDirectlyToGoogleSheets(
   order: Order,
@@ -135,29 +135,15 @@ export async function sendOrderDirectlyToGoogleSheets(
   inFlightOrderIds.add(String(order.orderNumber));
   inFlightOrderIds.add(orderCode);
 
-  // Anti-duplication: Prevent transmitting identical customer orders within 45 seconds
-  const itemsSig = `${order.customerName || ''}_${(order.items || []).map(i => `${i.name}x${i.quantity}`).join(',')}_${order.totalAmount}`;
-  const now = Date.now();
-  if (recentOrderSignatures.has(itemsSig)) {
-    const prevTime = recentOrderSignatures.get(itemsSig)!;
-    if (now - prevTime < 45000) {
-      console.warn('Skipping duplicate order network transmission:', itemsSig);
-      return true;
-    }
-  }
-  recentOrderSignatures.set(itemsSig, now);
-
   let success = false;
   try {
     const effectiveToken = token || await getAccessToken();
 
-    // 1. Direct Webhook transmission first if configured (100% automated, zero logins required for clients)
-    if (webhookUrl && webhookUrl.startsWith('https://script.google.com/')) {
-      try {
-        success = await appendOrderViaWebhook(order, customer, webhookUrl, targetSpreadsheetId);
-      } catch (err) {
-        console.warn('Direct Webhook append attempt notice:', err);
-      }
+    // 1. Direct Webhook transmission with serverless proxy fallback (zero logins required for clients)
+    try {
+      success = await appendOrderViaWebhook(order, customer, webhookUrl, targetSpreadsheetId);
+    } catch (err) {
+      console.warn('Direct Webhook append attempt notice:', err);
     }
 
     // 2. Direct Google Sheets API v4 fallback (if logged in with token)
@@ -173,6 +159,26 @@ export async function sendOrderDirectlyToGoogleSheets(
       markOrderAsSynced(order.id);
       markOrderAsSynced(String(order.orderNumber));
       markOrderAsSynced(orderCode);
+
+      // Remove from outbox queue if it was pending
+      const queue = getOutboxQueue();
+      const nextQueue = queue.filter(q => q.id !== `order_${order.id}` && q.id !== order.id);
+      if (nextQueue.length !== queue.length) {
+        saveOutboxQueue(nextQueue);
+      }
+    } else {
+      // Offline / network interrupted on mobile: save into outbox queue for guaranteed background retry!
+      const queue = getOutboxQueue();
+      if (!queue.some(q => q.id === `order_${order.id}`)) {
+        queue.push({
+          id: `order_${order.id}`,
+          type: 'order',
+          payload: { order, customer },
+          addedAt: Date.now(),
+          attempts: 1,
+        });
+        saveOutboxQueue(queue);
+      }
     }
   } finally {
     inFlightOrderIds.delete(order.id);
@@ -319,9 +325,32 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
 
     try {
       if (item.type === 'order') {
-        // Orders are sent directly once when created.
-        // Discard any residual queued orders to prevent re-sending or grouping in the sheet!
-        processedItemIds.add(item.id);
+        const { order, customer } = item.payload;
+        if (!order) {
+          processedItemIds.add(item.id);
+          continue;
+        }
+        const orderCode = order.id?.startsWith('ORD-') ? order.id : `ORD-${order.orderNumber}`;
+        const synced = getSyncedOrderIds();
+        if (synced.has(order.id) || synced.has(String(order.orderNumber)) || synced.has(orderCode)) {
+          processedItemIds.add(item.id);
+          continue;
+        }
+
+        let ok = false;
+        try {
+          ok = await appendOrderViaWebhook(order, customer, webhookUrl, spreadsheetId);
+          if (!ok && token && spreadsheetId) {
+            ok = await appendOrderToGoogleSheet(token, spreadsheetId, order, customer);
+          }
+        } catch (err: any) {
+          item.error = err?.message || 'Order transmission error';
+        }
+
+        if (ok) {
+          processedItemIds.add(item.id);
+          processedCount++;
+        }
         continue;
       } else if (item.type === 'customers_debt') {
         const { customers } = item.payload;

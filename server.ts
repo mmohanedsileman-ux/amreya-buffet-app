@@ -171,6 +171,55 @@ async function startServer() {
     return res.json(data || cachedSyncDebtData);
   });
 
+  // Dedicated /api/submit_order endpoint for ultra-reliable mobile phone order submission
+  app.post('/api/submit_order', apiRateLimiter, async (req, res) => {
+    try {
+      const orderData = req.body;
+      if (!orderData) {
+        return res.status(400).json({ success: false, error: 'Missing order payload' });
+      }
+
+      const webhookUrl = 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: typeof orderData === 'string' ? orderData : JSON.stringify(orderData),
+          signal: controller.signal,
+        });
+
+        const text = await response.text();
+        clearTimeout(timeout);
+
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = { status: 'success', raw: text };
+        }
+
+        return res.json({
+          success: true,
+          sheetResult: parsed,
+          message: 'Order successfully recorded to Google Sheet',
+        });
+      } catch (err: any) {
+        clearTimeout(timeout);
+        console.error('Server proxy fetch to Google Sheet failed:', err);
+        return res.status(500).json({
+          success: false,
+          error: err?.message || 'Failed connecting to Google Apps Script',
+        });
+      }
+    } catch (e: any) {
+      console.error('Submit order proxy error:', e);
+      return res.status(500).json({ success: false, error: e?.message });
+    }
+  });
+
   // Health check endpoint for uptime and monitoring
   app.get('/api/health', (req, res) => {
     res.json({

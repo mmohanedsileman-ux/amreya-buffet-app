@@ -342,6 +342,22 @@ export default function App() {
   const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState('');
   const [adminPinError, setAdminPinError] = useState('');
+  const [orderSyncStatus, setOrderSyncStatus] = useState<Record<string, 'syncing' | 'synced' | 'failed'>>({});
+
+  const handleRetrySyncOrder = (order: Order) => {
+    let cust = order.customerId ? (customers.find(c => c.id === order.customerId) || INITIAL_CUSTOMERS.find(c => c.id === order.customerId)) : null;
+    if (!cust && order.customerName) {
+      cust = customers.find(c => c.name === order.customerName) || INITIAL_CUSTOMERS.find(c => c.name === order.customerName) || null;
+    }
+    setOrderSyncStatus(prev => ({ ...prev, [order.id]: 'syncing' }));
+    sendOrderDirectlyToGoogleSheets(order, cust, googleAccessToken, activeSpreadsheetId)
+      .then(ok => {
+        setOrderSyncStatus(prev => ({ ...prev, [order.id]: ok ? 'synced' : 'failed' }));
+      })
+      .catch(() => {
+        setOrderSyncStatus(prev => ({ ...prev, [order.id]: 'failed' }));
+      });
+  };
 
   const handleOpenAdminPrompt = () => {
     setAdminPinInput('');
@@ -437,9 +453,8 @@ export default function App() {
       }
     }).catch(() => {});
 
-    // Clean any stuck previous orders from outbox
-    clearOutboxQueue();
-    purgeStuckOldOrdersFromQueue();
+    // Trigger resilient sync queue flush on startup to guarantee any offline mobile orders are sent
+    flushSyncQueue().catch(() => {});
 
     // Initialize background sync queue worker for online event
     const stopQueueWorker = initBackgroundSyncQueueWorker();
@@ -1357,8 +1372,16 @@ export default function App() {
       }
     }
     
-    // Direct immediate send via Webhook / Sheets
-    sendOrderDirectlyToGoogleSheets(newOrder, cust, googleAccessToken, activeSpreadsheetId).catch(console.warn);
+    // Direct immediate send via Webhook / Serverless Proxy / Sheets
+    const orderId = newOrder.id;
+    setOrderSyncStatus(prev => ({ ...prev, [orderId]: 'syncing' }));
+    sendOrderDirectlyToGoogleSheets(newOrder, cust, googleAccessToken, activeSpreadsheetId)
+      .then(ok => {
+        setOrderSyncStatus(prev => ({ ...prev, [orderId]: ok ? 'synced' : 'failed' }));
+      })
+      .catch(() => {
+        setOrderSyncStatus(prev => ({ ...prev, [orderId]: 'failed' }));
+      });
   };
 
   // Payment Settlement handling with background synchronization
@@ -1960,6 +1983,8 @@ export default function App() {
       <ReceiptModal
         order={receiptOrder}
         onClose={() => setReceiptOrder(null)}
+        syncStatus={receiptOrder ? (orderSyncStatus[receiptOrder.id] || 'synced') : 'synced'}
+        onRetrySync={handleRetrySyncOrder}
         onNewOrderForAnotherEmployee={() => {
           setReceiptOrder(null);
           handleClearActiveCustomer();
