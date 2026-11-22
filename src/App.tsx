@@ -81,7 +81,9 @@ import {
   flushSyncQueue,
   sendOrderDirectlyToGoogleSheets,
   purgeStuckOldOrdersFromQueue,
-  clearOutboxQueue
+  clearOutboxQueue,
+  onOrderSynced,
+  getSyncedOrderIds
 } from './services/syncQueue';
 import { normalizeDigits, isCorrectAdminPin, resetFailedPinAttempts } from './utils/security';
 
@@ -458,10 +460,14 @@ export default function App() {
 
     // Initialize background sync queue worker for online event
     const stopQueueWorker = initBackgroundSyncQueueWorker();
+    const stopOrderSyncListener = onOrderSynced((syncedOrderId) => {
+      setOrderSyncStatus(prev => ({ ...prev, [syncedOrderId]: 'synced' }));
+    });
 
     return () => {
       unsubscribe();
       if (stopQueueWorker) stopQueueWorker();
+      stopOrderSyncListener();
     };
   }, []);
 
@@ -1283,29 +1289,35 @@ export default function App() {
 
     const now = Date.now();
     const customerKey = (newOrder.customerId || newOrder.customerName || '').trim().toLowerCase();
+    const isSharedWalkInOrGuest =
+      !newOrder.customerId ||
+      newOrder.customerId === 'CUST-EXTERNAL' ||
+      newOrder.customerId === 'CUST-1000' ||
+      newOrder.customerId.startsWith('CUST-GUEST') ||
+      customerKey.includes('خارجي') ||
+      customerKey.includes('ضيوف');
+
     const itemsKey = newOrder.items
       .map(i => `${i.name}_${i.quantity}_${i.size || ''}_${i.sugar || ''}`)
       .sort()
       .join('|');
 
-    // Prevent duplicate orders for the same customer with exact same items within 60 seconds
-    const isDuplicate = recentOrdersRef.current.some(recent => {
+    // Only guard against accidental rapid double-tap (< 8 seconds) for the exact same registered employee
+    const isDuplicate = !isSharedWalkInOrGuest && recentOrdersRef.current.some(recent => {
       const isSameCustomer = recent.customerKey === customerKey;
       const isSameItems = recent.itemsKey === itemsKey;
-      const isRecent = (now - recent.timestamp) < 60000;
+      const isRecent = (now - recent.timestamp) < 8000;
       return isSameCustomer && isSameItems && isRecent;
     });
 
     if (isDuplicate) {
-      console.warn('Blocked duplicate order attempt:', newOrder.id, customerKey);
-      // Still show receipt modal for the customer's peace of mind without creating a duplicate
-      setReceiptOrder(newOrder);
+      console.warn('Blocked rapid accidental double-tap order:', newOrder.id, customerKey);
       return;
     }
 
     recentOrdersRef.current = [
       { orderId: newOrder.id, customerKey, itemsKey, timestamp: now },
-      ...recentOrdersRef.current.filter(r => (now - r.timestamp) < 120000)
+      ...recentOrdersRef.current.filter(r => (now - r.timestamp) < 30000)
     ];
 
     // 1. Prepend order
@@ -1355,7 +1367,9 @@ export default function App() {
       }
     }
 
-    // 3. Open receipt & play confirmation chime
+    // 3. Mark order as syncing BEFORE opening receipt so it NEVER shows a fake green check prematurely
+    const orderId = newOrder.id;
+    setOrderSyncStatus(prev => ({ ...prev, [orderId]: 'syncing' }));
     setReceiptOrder(newOrder);
     sounds.playOrderSuccess();
 
@@ -1372,9 +1386,7 @@ export default function App() {
       }
     }
     
-    // Direct immediate send via Webhook / Serverless Proxy / Sheets
-    const orderId = newOrder.id;
-    setOrderSyncStatus(prev => ({ ...prev, [orderId]: 'syncing' }));
+    // Direct immediate verified send via Serverless Proxy / Sheets
     sendOrderDirectlyToGoogleSheets(newOrder, cust, googleAccessToken, activeSpreadsheetId)
       .then(ok => {
         setOrderSyncStatus(prev => ({ ...prev, [orderId]: ok ? 'synced' : 'failed' }));
@@ -1983,7 +1995,11 @@ export default function App() {
       <ReceiptModal
         order={receiptOrder}
         onClose={() => setReceiptOrder(null)}
-        syncStatus={receiptOrder ? (orderSyncStatus[receiptOrder.id] || 'synced') : 'synced'}
+        syncStatus={
+          receiptOrder
+            ? (orderSyncStatus[receiptOrder.id] || (getSyncedOrderIds().has(receiptOrder.id) ? 'synced' : 'failed'))
+            : 'synced'
+        }
         onRetrySync={handleRetrySyncOrder}
         onNewOrderForAnotherEmployee={() => {
           setReceiptOrder(null);

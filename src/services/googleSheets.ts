@@ -582,6 +582,15 @@ let cachedTargetOrdersSheetName: string | null = null;
 export const APPS_SCRIPT_TEMPLATE = `// كود المزامنة التلقائية الفورية لشيت بوفية اسمنت العامرية
 // الصق هذا الكود في Google Sheets -> Extensions (الإضافات) -> Apps Script
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    // قفل لمنع تداخل الطلبات المتزامنة وقت الذروة حتى لا يكتب طلب فوق طلب آخر
+    lock.waitLock(25000);
+  } catch (lockErr) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: "السيرفر مشغول، يرجى إعادة المحاولة" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     
@@ -635,7 +644,7 @@ function doPost(e) {
       }
 
       var colACust = custSheet.getRange("A1:A").getValues();
-      var nextCustRow = 2;
+      var nextCustRow = colACust.length + 1;
       for (var c = 1; c < colACust.length; c++) {
         var val = colACust[c][0];
         if (val === null || val === undefined || String(val).trim() === "") {
@@ -645,6 +654,7 @@ function doPost(e) {
       }
 
       custSheet.getRange(nextCustRow, 1, 1, custRow.length).setValues([custRow]);
+      SpreadsheetApp.flush();
       return ContentService.createTextOutput(JSON.stringify({ status: "success", type: "customer", row: nextCustRow }))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -673,9 +683,9 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // فحص العمود A فقط لمعرفة أول صف فارغ تماماً وتجنب مربعات الاختيار في العمود I
+    // فحص العمود A لمعرفة أول صف فارغ تماماً (ولو امتلأ الشيت بالكامل يضيف صفاً جديداً بالأسفل دون الكتابة فوق الصف 2)
     var colA = sheet.getRange("A1:A").getValues();
-    var nextRow = 2;
+    var nextRow = colA.length + 1;
     for (var i = 1; i < colA.length; i++) {
       var cellVal = colA[i][0];
       if (cellVal === null || cellVal === undefined || String(cellVal).trim() === "") {
@@ -684,28 +694,12 @@ function doPost(e) {
       }
     }
 
-    // منع تكرار رقم الطلب إذا كان مضافاً مسبقاً
+    // منع تكرار نفس رقم الطلب الفريد فقط
     var orderCode = String(row[0]).trim();
     for (var j = 0; j < colA.length; j++) {
       if (colA[j][0] && String(colA[j][0]).trim() === orderCode) {
         return ContentService.createTextOutput(JSON.stringify({ status: "already_exists", row: j + 1 }))
           .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    // فحص ذكي لآخر 5 صفوف لمنع تكرار نفس الطلب لنفس العميل لو ضغط مرتين في نفس اللحظة
-    var custName = String(row[2] || '').trim();
-    var itemDetails = String(row[3] || '').trim();
-    if (nextRow > 2 && custName !== '') {
-      var checkStart = Math.max(2, nextRow - 5);
-      var recentData = sheet.getRange(checkStart, 1, nextRow - checkStart, 4).getValues();
-      for (var r = recentData.length - 1; r >= 0; r--) {
-        var prevCust = String(recentData[r][2] || '').trim();
-        var prevItems = String(recentData[r][3] || '').trim();
-        if (prevCust === custName && prevItems === itemDetails) {
-          return ContentService.createTextOutput(JSON.stringify({ status: "already_exists_duplicate", row: checkStart + r }))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
       }
     }
 
@@ -720,11 +714,14 @@ function doPost(e) {
       sheet.getRange(nextRow, 10).setValue(isPaid);
     } catch (errCheck) {}
 
+    SpreadsheetApp.flush();
     return ContentService.createTextOutput(JSON.stringify({ status: "success", type: "order", row: nextRow }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ status: "error", error: error.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -913,12 +910,13 @@ export async function appendOrderViaWebhook(
   order: Order,
   customer?: Customer | null,
   webhookUrl: string = getStoredWebhookUrl(),
-  targetSpreadsheetId?: string
+  targetSpreadsheetId?: string,
+  isRetry: boolean = false
 ): Promise<boolean> {
   const orderCode = order.id?.startsWith('ORD-') ? order.id : `ORD-${order.orderNumber}`;
   const synced = getSyncedOrderIds();
   if (synced.has(order.id) || synced.has(String(order.orderNumber)) || synced.has(orderCode)) {
-    return true; // Already synced, avoid duplication
+    return true; // Already verified synced, avoid duplication
   }
 
   const row = formatOrderToSheetRow(order, customer);
@@ -939,43 +937,56 @@ export async function appendOrderViaWebhook(
     paymentStatus: row[6],
     notes: row[7] || '',
     spreadsheetId: sheetId,
+    isRetry,
   };
 
-  // Tier 1: Dedicated Serverless backend proxy (/api/submit_order)
-  // Same-origin HTTPS POST completely eliminates mobile browser CORS issues,
-  // carrier firewalls, and iOS/Android 302 cross-domain redirect drops!
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
-    const proxyRes = await fetch('/api/submit_order', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-      keepalive: true,
-    });
-    clearTimeout(timeoutId);
+  // Tier 1: Dedicated Serverless backend proxy (/api/submit_order) with verified JSON receipt
+  // Never fakes success — only marks synced when Google Sheets confirms the row was written!
+  let proxyEndpointMissing = false;
 
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data && data.success) {
-        markOrderAsSynced(order.id);
-        markOrderAsSynced(String(order.orderNumber));
-        markOrderAsSynced(orderCode);
-        return true;
-      }
-    }
-  } catch (proxyErr) {
-    console.warn('Proxy /api/submit_order note:', proxyErr);
-  }
-
-  // Tier 2: Direct Google Apps Script Webhook fallback (text/plain mode: no-cors with keepalive)
-  if (webhookUrl && webhookUrl.startsWith('https://script.google.com/')) {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 12000);
+      const timeoutId = setTimeout(() => controller.abort(), 18000);
+      const proxyRes = await fetch('/api/submit_order', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ...payload, isRetry: isRetry || attempt > 0 }),
+        signal: controller.signal,
+        keepalive: true,
+      });
+      clearTimeout(timeoutId);
+
+      if (proxyRes.status === 404) {
+        proxyEndpointMissing = true;
+        break;
+      }
+
+      if (proxyRes.ok) {
+        const data = await proxyRes.json();
+        if (data && data.success && data.verified !== false) {
+          markOrderAsSynced(order.id);
+          markOrderAsSynced(String(order.orderNumber));
+          markOrderAsSynced(orderCode);
+          return true;
+        }
+      }
+    } catch (proxyErr) {
+      console.warn(`Proxy /api/submit_order attempt ${attempt + 1} notice:`, proxyErr);
+    }
+
+    if (attempt === 0) {
+      await new Promise(resolve => setTimeout(resolve, 900));
+    }
+  }
+
+  // Tier 2: Direct Google Apps Script fallback ONLY when no /api/submit_order endpoint exists (static preview)
+  if (proxyEndpointMissing && webhookUrl && webhookUrl.startsWith('https://script.google.com/')) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       await fetch(webhookUrl, {
         method: 'POST',
         mode: 'no-cors',

@@ -203,7 +203,9 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
     setOrderError(null);
 
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    // Generate a globally unique 8-digit order number (timestamp suffix + 2 random digits)
+    // Eliminates collisions with 1,000+ historical rows in Google Sheets Column A!
+    const uniqueOrderNum = Number(`${String(Date.now()).slice(-6)}${Math.floor(10 + Math.random() * 90)}`);
     const finalCustomerId = isHospitalityAccount
       ? (activeCustomer?.id || selectedCustomer?.id || 'CUST-1000')
       : (isRegisteredEmployee && effectiveActiveCustomer)
@@ -221,8 +223,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       : (cashierNotes.trim() ? cashierNotes.trim() : undefined);
 
     const newOrder: Order = {
-      id: `ORD-${randomNum}`,
-      orderNumber: randomNum,
+      id: `ORD-${uniqueOrderNum}`,
+      orderNumber: uniqueOrderNum,
       createdAt: new Date().toISOString(),
       items: cart.map(item => ({
         name: item.item.name,

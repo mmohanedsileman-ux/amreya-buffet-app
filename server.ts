@@ -174,46 +174,102 @@ async function startServer() {
   // Dedicated /api/submit_order endpoint for ultra-reliable mobile phone order submission
   app.post('/api/submit_order', apiRateLimiter, async (req, res) => {
     try {
-      const orderData = req.body;
-      if (!orderData) {
+      let orderData = req.body;
+      if (typeof orderData === 'string') {
+        try {
+          orderData = JSON.parse(orderData);
+        } catch {
+          return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
+        }
+      }
+      if (!orderData || typeof orderData !== 'object') {
         return res.status(400).json({ success: false, error: 'Missing order payload' });
       }
 
+      const isRetry = Boolean(orderData.isRetry);
       const webhookUrl = 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
 
-      try {
-        const response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: typeof orderData === 'string' ? orderData : JSON.stringify(orderData),
-          signal: controller.signal,
-        });
-
-        const text = await response.text();
-        clearTimeout(timeout);
-
-        let parsed: any = null;
+      const postToGoogleSheet = async (payloadObj: any, timeoutMs = 15000) => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
         try {
-          parsed = JSON.parse(text);
-        } catch {
-          parsed = { status: 'success', raw: text };
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payloadObj),
+            signal: controller.signal,
+          });
+          const text = await response.text();
+          clearTimeout(timeout);
+          if (!response.ok) {
+            return { ok: false, error: `Google Script HTTP ${response.status}` };
+          }
+          try {
+            return { ok: true, parsed: JSON.parse(text) };
+          } catch {
+            return { ok: false, error: 'Google Script returned non-JSON response' };
+          }
+        } catch (err: any) {
+          clearTimeout(timeout);
+          return { ok: false, error: err?.name === 'AbortError' ? 'Timeout waiting for Google Sheets' : (err?.message || 'Network error') };
         }
+      };
 
-        return res.json({
-          success: true,
-          sheetResult: parsed,
-          message: 'Order successfully recorded to Google Sheet',
-        });
-      } catch (err: any) {
-        clearTimeout(timeout);
-        console.error('Server proxy fetch to Google Sheet failed:', err);
-        return res.status(500).json({
-          success: false,
-          error: err?.message || 'Failed connecting to Google Apps Script',
-        });
+      let result = await postToGoogleSheet(orderData, 15000);
+      if (!result.ok) {
+        await new Promise((r) => setTimeout(r, 700));
+        result = await postToGoogleSheet(orderData, 15000);
       }
+
+      if (!result.ok || !result.parsed) {
+        return res.status(502).json({ success: false, error: result.error || 'Failed to record order' });
+      }
+
+      const parsed = result.parsed;
+      const status = String(parsed.status || '').toLowerCase();
+
+      if (status === 'success' || status === 'ok') {
+        return res.json({ success: true, verified: true, row: parsed.row, sheetResult: parsed });
+      }
+
+      if (status === 'already_exists') {
+        if (isRetry) {
+          return res.json({ success: true, verified: true, row: parsed.row, sheetResult: parsed });
+        }
+        const uniqueTag = `${String(Date.now()).slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
+        const newOrderId = `ORD-${uniqueTag}`;
+        const retryPayload = {
+          ...orderData,
+          orderId: newOrderId,
+          row: Array.isArray(orderData.row) ? [newOrderId, ...orderData.row.slice(1)] : orderData.row,
+        };
+        const retryRes = await postToGoogleSheet(retryPayload, 15000);
+        if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
+          return res.json({ success: true, verified: true, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
+        }
+        return res.status(502).json({ success: false, error: 'Order ID collision retry failed' });
+      }
+
+      if (status === 'already_exists_duplicate') {
+        const shortTag = String(orderData.orderId || Date.now()).replace(/\D/g, '').slice(-4);
+        const patchedRow = Array.isArray(orderData.row) ? [...orderData.row] : undefined;
+        if (patchedRow && patchedRow.length >= 4) {
+          patchedRow[3] = `${patchedRow[3]} (#${shortTag})`;
+        }
+        const retryPayload = {
+          ...orderData,
+          items: orderData.items ? `${orderData.items} (#${shortTag})` : orderData.items,
+          row: patchedRow,
+        };
+        const retryRes = await postToGoogleSheet(retryPayload, 15000);
+        if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
+          return res.json({ success: true, verified: true, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
+        }
+        return res.status(502).json({ success: false, error: 'Duplicate-filter bypass retry failed' });
+      }
+
+      return res.status(502).json({ success: false, error: parsed.error || parsed.message || 'Google Sheet rejected the order', sheetResult: parsed });
     } catch (e: any) {
       console.error('Submit order proxy error:', e);
       return res.status(500).json({ success: false, error: e?.message });

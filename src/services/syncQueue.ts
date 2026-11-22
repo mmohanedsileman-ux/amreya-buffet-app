@@ -20,6 +20,20 @@ import { getAccessToken } from './googleAuth';
 
 export { getSyncedOrderIds, markOrderAsSynced, SYNCED_ORDERS_CACHE_KEY };
 
+type OrderSyncedListener = (orderId: string) => void;
+const orderSyncedListeners = new Set<OrderSyncedListener>();
+
+export function onOrderSynced(listener: OrderSyncedListener): () => void {
+  orderSyncedListeners.add(listener);
+  return () => orderSyncedListeners.delete(listener);
+}
+
+function notifyOrderSynced(orderId: string) {
+  orderSyncedListeners.forEach(fn => {
+    try { fn(orderId); } catch {}
+  });
+}
+
 export interface QueueItem {
   id: string;
   type: 'order' | 'customers_debt' | 'new_customer' | 'new_employee';
@@ -159,6 +173,7 @@ export async function sendOrderDirectlyToGoogleSheets(
       markOrderAsSynced(order.id);
       markOrderAsSynced(String(order.orderNumber));
       markOrderAsSynced(orderCode);
+      notifyOrderSynced(order.id);
 
       // Remove from outbox queue if it was pending
       const queue = getOutboxQueue();
@@ -306,22 +321,26 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
   const processedItemIds = new Set<string>();
   let processedCount = 0;
 
+  const updatedItemsMap = new Map<string, QueueItem>();
+
   for (const item of queue) {
-    // If item failed too many times, drop it to prevent infinite loops
-    if (item.attempts >= 4) {
-      console.warn(`Dropping queue item ${item.id} after 4 attempts`);
+    // Allow up to 15 retry attempts for orders (zero lost orders), 4 for auxiliary syncs
+    const maxAttempts = item.type === 'order' ? 15 : 4;
+    if (item.attempts >= maxAttempts) {
+      console.warn(`Dropping queue item ${item.id} after ${maxAttempts} attempts`);
       processedItemIds.add(item.id);
       continue;
     }
 
-    // Exponential backoff if failed repeatedly
-    const backoffDelay = Math.min(30000, Math.pow(2, item.attempts) * 1000);
+    // Backoff: 6s -> 12s -> 20s -> 30s max
+    const backoffDelay = Math.min(30000, Math.max(6000, item.attempts * 6000));
     if (item.lastAttemptAt && Date.now() - item.lastAttemptAt < backoffDelay) {
       continue;
     }
 
     item.attempts += 1;
     item.lastAttemptAt = Date.now();
+    updatedItemsMap.set(item.id, item);
 
     try {
       if (item.type === 'order') {
@@ -334,12 +353,13 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
         const synced = getSyncedOrderIds();
         if (synced.has(order.id) || synced.has(String(order.orderNumber)) || synced.has(orderCode)) {
           processedItemIds.add(item.id);
+          notifyOrderSynced(order.id);
           continue;
         }
 
         let ok = false;
         try {
-          ok = await appendOrderViaWebhook(order, customer, webhookUrl, spreadsheetId);
+          ok = await appendOrderViaWebhook(order, customer, webhookUrl, spreadsheetId, true);
           if (!ok && token && spreadsheetId) {
             ok = await appendOrderToGoogleSheet(token, spreadsheetId, order, customer);
           }
@@ -350,6 +370,7 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
         if (ok) {
           processedItemIds.add(item.id);
           processedCount++;
+          notifyOrderSynced(order.id);
         }
         continue;
       } else if (item.type === 'customers_debt') {
@@ -424,9 +445,11 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
     }
   }
 
-  // Atomically remove only the processed items from current outbox queue to preserve newly added items
+  // Atomically remove processed items & persist updated attempt counters for remaining items
   const freshQueue = getOutboxQueue();
-  const remainingQueue = freshQueue.filter(it => !processedItemIds.has(it.id));
+  const remainingQueue = freshQueue
+    .filter(it => !processedItemIds.has(it.id))
+    .map(it => updatedItemsMap.get(it.id) || it);
   saveOutboxQueue(remainingQueue);
 
   return { processed: processedCount, remaining: remainingQueue.length };
@@ -434,7 +457,7 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
 
 /**
  * Background queue listener initialization
- * Automatically syncs periodically (every 45s), on network reconnect, and on tab visibility.
+ * Automatically syncs periodically (every 15s), on network reconnect, and on tab visibility.
  */
 export function initBackgroundSyncQueueWorker() {
   if (typeof window === 'undefined') return () => {};
@@ -458,10 +481,12 @@ export function initBackgroundSyncQueueWorker() {
     }
   };
 
-  // Automatic periodic sync interval every 45 seconds
+  // Automatic periodic sync interval every 15 seconds for fast mobile recovery
   const intervalId = setInterval(() => {
-    flushSyncQueue().catch(console.warn);
-  }, 45000);
+    if (getOutboxQueue().length > 0) {
+      flushSyncQueue().catch(console.warn);
+    }
+  }, 15000);
 
   window.addEventListener('online', handleOnline);
   window.addEventListener('focus', handleVisibilityChange);
