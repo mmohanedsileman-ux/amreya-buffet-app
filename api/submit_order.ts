@@ -59,15 +59,28 @@ export default async function handler(req: any, res: any) {
     }
 
     const envSheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
-    const orderData = {
-      ...rawBody,
+    const resolvedOrderNumber = String(
+      rawBody.orderId || (Array.isArray(rawBody.row) ? rawBody.row[0] : '') || ''
+    ).trim();
+
+    // Forward ONLY exact, unmodified order data (never alters items, notes, or orderId!)
+    const forwardPayload = {
+      type: rawBody.type || 'order',
+      sheetName: rawBody.sheetName || 'سجل_الطلبات',
+      orderId: resolvedOrderNumber,
+      row: Array.isArray(rawBody.row) ? rawBody.row.slice(0, 8) : undefined,
+      customerName: rawBody.customerName,
+      items: rawBody.items,
+      total: rawBody.total,
+      paymentMethod: rawBody.paymentMethod,
+      paymentStatus: rawBody.paymentStatus,
+      notes: rawBody.notes || '',
       spreadsheetId: envSheetId || rawBody.spreadsheetId,
     };
 
-    const isRetry = Boolean(orderData.isRetry);
     const webhookUrl = resolveSafeWebhookUrl();
 
-    const postToGoogleSheet = async (payloadObj: any, timeoutMs = 15000) => {
+    const postToGoogleSheet = async (timeoutMs = 9500) => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
       try {
@@ -77,7 +90,7 @@ export default async function handler(req: any, res: any) {
           headers: {
             'Content-Type': 'text/plain;charset=utf-8',
           },
-          body: JSON.stringify(payloadObj),
+          body: JSON.stringify(forwardPayload),
           signal: controller.signal,
         });
 
@@ -87,9 +100,7 @@ export default async function handler(req: any, res: any) {
         if (!response.ok) {
           return {
             ok: false,
-            httpStatus: response.status,
             error: `Google Script HTTP ${response.status}`,
-            raw: responseText.slice(0, 300),
           };
         }
 
@@ -99,9 +110,7 @@ export default async function handler(req: any, res: any) {
         } catch {
           return {
             ok: false,
-            httpStatus: response.status,
-            error: 'Google Script returned non-JSON response (possible rate limit or script error)',
-            raw: responseText.slice(0, 300),
+            error: 'Google Script returned non-JSON response',
           };
         }
 
@@ -115,11 +124,11 @@ export default async function handler(req: any, res: any) {
       }
     };
 
-    // Attempt 1 (with 1 automatic server-side retry on transient failure/timeout)
-    let result = await postToGoogleSheet(orderData, 15000);
+    // Fast attempt 1 + 1 quick idempotent retry (same exact orderId -> zero duplicates possible)
+    let result = await postToGoogleSheet(9500);
     if (!result.ok) {
-      await new Promise((r) => setTimeout(r, 700));
-      result = await postToGoogleSheet(orderData, 15000);
+      await new Promise((r) => setTimeout(r, 300));
+      result = await postToGoogleSheet(9500);
     }
 
     if (!result.ok || !result.parsed) {
@@ -132,97 +141,26 @@ export default async function handler(req: any, res: any) {
 
     const parsed = result.parsed;
     const status = String(parsed.status || '').toLowerCase();
-    const resolvedOrderNumber = String(orderData.orderId || (Array.isArray(orderData.row) ? orderData.row[0] : '') || '');
 
-    // Verified written to Google Sheet!
-    if (status === 'success' || status === 'ok') {
+    // Strictly idempotent: both "success"/"ok" AND "already_exists" mean THIS exact order
+    // is safely recorded ONCE in Google Sheets. NEVER generate a new ID or append extra text!
+    if (status === 'success' || status === 'ok' || status === 'already_exists') {
       return res.status(200).json({
         success: true,
         verified: true,
         orderNumber: resolvedOrderNumber,
         row: parsed.row,
-        sheetResult: parsed,
-        message: 'Order verified and recorded in Google Sheet',
+        duplicatePrevented: status === 'already_exists',
+        message: status === 'already_exists'
+          ? 'Order already recorded once in Google Sheet'
+          : 'Order verified and recorded in Google Sheet',
       });
     }
 
-    // Order ID already exists in sheet:
-    // - If this was a retry from the outbox queue, the earlier attempt DID succeed -> confirm success!
-    // - If this was a brand new order with an accidental ID collision -> regenerate unique suffix & save!
-    if (status === 'already_exists') {
-      if (isRetry) {
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          orderNumber: resolvedOrderNumber,
-          row: parsed.row,
-          sheetResult: parsed,
-          message: 'Order already recorded on earlier attempt',
-        });
-      }
-
-      const uniqueTag = `${String(Date.now()).slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
-      const newOrderId = `ORD-${uniqueTag}`;
-      const retryPayload = {
-        ...orderData,
-        orderId: newOrderId,
-        row: Array.isArray(orderData.row) ? [newOrderId, ...orderData.row.slice(1)] : orderData.row,
-      };
-      const retryRes = await postToGoogleSheet(retryPayload, 15000);
-      if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          orderNumber: newOrderId,
-          row: retryRes.parsed.row,
-          sheetResult: retryRes.parsed,
-          message: 'Order recorded with fresh unique ID',
-        });
-      }
-      return res.status(502).json({
-        success: false,
-        error: 'Order ID collision retry failed',
-        sheetResult: retryRes.parsed || retryRes.error,
-      });
-    }
-
-    // Legacy Apps Script 5-row same-customer + same-items filter rejected a genuine repeat order!
-    // Disambiguate the items cell with the short order code and immediately re-submit so the order is NEVER lost.
-    if (status === 'already_exists_duplicate') {
-      const shortTag = String(orderData.orderId || Date.now()).replace(/\D/g, '').slice(-4);
-      const patchedRow = Array.isArray(orderData.row) ? [...orderData.row] : undefined;
-      if (patchedRow && patchedRow.length >= 4) {
-        patchedRow[3] = `${patchedRow[3]} (#${shortTag})`;
-      }
-      const retryPayload = {
-        ...orderData,
-        items: orderData.items ? `${orderData.items} (#${shortTag})` : orderData.items,
-        row: patchedRow,
-      };
-      const retryRes = await postToGoogleSheet(retryPayload, 15000);
-      if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
-        return res.status(200).json({
-          success: true,
-          verified: true,
-          orderNumber: resolvedOrderNumber,
-          row: retryRes.parsed.row,
-          sheetResult: retryRes.parsed,
-          message: 'Repeat order disambiguated and recorded in Google Sheet',
-        });
-      }
-      return res.status(502).json({
-        success: false,
-        error: 'Duplicate-filter bypass retry failed',
-        sheetResult: retryRes.parsed || retryRes.error,
-      });
-    }
-
-    // Any explicit Apps Script error -> NEVER lie and return success: true!
     console.error('[submit_order] Google Script returned error:', parsed);
     return res.status(502).json({
       success: false,
       error: parsed.error || parsed.message || 'Google Sheet rejected the order',
-      sheetResult: parsed,
     });
   } catch (err: any) {
     console.error('Submit order proxy error:', err);

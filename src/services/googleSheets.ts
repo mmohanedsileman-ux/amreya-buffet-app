@@ -621,7 +621,7 @@ export async function appendOrderViaWebhook(
     row,
     orderId: orderCode,
     customerName: String(row[2]),
-    items: order.items.map(it => `${it.name} × ${it.quantity}`).join('، '),
+    items: String(row[3]),
     total: row[4],
     paymentMethod: String(row[5]),
     paymentStatus: String(row[6]),
@@ -635,9 +635,11 @@ export async function appendOrderViaWebhook(
   let proxyEndpointMissing = false;
 
   for (let attempt = 0; attempt < 2; attempt++) {
+    const startedAt = Date.now();
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 18000);
+      // 21s timeout covers /api/submit_order's internal 9.5s + 0.3s + 9.5s worst-case window without aborting mid-write
+      const timeoutId = setTimeout(() => controller.abort(), 21000);
       const proxyRes = await fetch(SHEET_CONFIG.apiEndpoints.submitOrder, {
         method: 'POST',
         headers: {
@@ -663,12 +665,21 @@ export async function appendOrderViaWebhook(
           return true;
         }
       }
+
+      // If server returned a validation 4xx error, do not retry blindly
+      if (proxyRes.status >= 400 && proxyRes.status < 500) {
+        break;
+      }
     } catch (proxyErr) {
       console.warn(`Proxy /api/submit_order attempt ${attempt + 1} notice:`, proxyErr);
     }
 
-    if (attempt === 0) {
-      await new Promise(resolve => setTimeout(resolve, 900));
+    // Only retry immediately if attempt 1 failed quickly (e.g. mobile network drop < 12s)
+    const elapsed = Date.now() - startedAt;
+    if (attempt === 0 && elapsed < 12000) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    } else {
+      break;
     }
   }
 

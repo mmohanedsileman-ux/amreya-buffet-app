@@ -1,17 +1,13 @@
 import { Order, Customer } from '../types';
 import { 
-  appendOrderToGoogleSheet, 
   syncCustomersToGoogleSheet,
-  createCafeOrdersSpreadsheet,
   DEFAULT_SPREADSHEET_ID,
   getStoredWebhookUrl,
   appendOrderViaWebhook,
-  syncCustomersViaWebhook,
   appendNewCustomerViaWebhook,
   appendCustomerToGoogleSheet,
   appendEmployeeToGoogleSheet,
   appendEmployeeViaWebhook,
-  extractCleanEmployeeName,
   getSyncedOrderIds,
   markOrderAsSynced,
   SYNCED_ORDERS_CACHE_KEY
@@ -151,22 +147,12 @@ export async function sendOrderDirectlyToGoogleSheets(
 
   let success = false;
   try {
-    const effectiveToken = token || await getAccessToken();
-
-    // 1. Direct Webhook transmission with serverless proxy fallback (zero logins required for clients)
+    // Single authoritative idempotent write channel (/api/submit_order -> Apps Script with LockService + orderId deduplication)
+    // Eliminates duplicate writes from racing two different writers (Webhook + Sheets API v4)
     try {
       success = await appendOrderViaWebhook(order, customer, webhookUrl, targetSpreadsheetId);
     } catch (err) {
       console.warn('Direct Webhook append attempt notice:', err);
-    }
-
-    // 2. Direct Google Sheets API v4 fallback (if logged in with token)
-    if (!success && effectiveToken && targetSpreadsheetId) {
-      try {
-        success = await appendOrderToGoogleSheet(effectiveToken, targetSpreadsheetId, order, customer);
-      } catch (err) {
-        console.warn('Direct Google API append attempt notice:', err);
-      }
     }
 
     if (success) {
@@ -190,6 +176,7 @@ export async function sendOrderDirectlyToGoogleSheets(
           type: 'order',
           payload: { order, customer },
           addedAt: Date.now(),
+          lastAttemptAt: Date.now(),
           attempts: 1,
         });
         saveOutboxQueue(queue);
@@ -269,7 +256,6 @@ export function enqueueNewEmployeeSync(customer: Customer) {
 
 let isFlushingQueue = false;
 const inFlightOrderIds = new Set<string>();
-const recentOrderSignatures = new Map<string, number>();
 
 /**
  * Processes and transmits pending queue items through the protocol with strict mutex & continuous draining
@@ -357,17 +343,34 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
           continue;
         }
 
+        if (
+          inFlightOrderIds.has(order.id) ||
+          inFlightOrderIds.has(String(order.orderNumber)) ||
+          inFlightOrderIds.has(orderCode)
+        ) {
+          continue;
+        }
+
+        inFlightOrderIds.add(order.id);
+        inFlightOrderIds.add(String(order.orderNumber));
+        inFlightOrderIds.add(orderCode);
+
         let ok = false;
         try {
+          // Single authoritative idempotent write channel (/api/submit_order -> Apps Script LockService)
           ok = await appendOrderViaWebhook(order, customer, webhookUrl, spreadsheetId, true);
-          if (!ok && token && spreadsheetId) {
-            ok = await appendOrderToGoogleSheet(token, spreadsheetId, order, customer);
-          }
         } catch (err: any) {
           item.error = err?.message || 'Order transmission error';
+        } finally {
+          inFlightOrderIds.delete(order.id);
+          inFlightOrderIds.delete(String(order.orderNumber));
+          inFlightOrderIds.delete(orderCode);
         }
 
         if (ok) {
+          markOrderAsSynced(order.id);
+          markOrderAsSynced(String(order.orderNumber));
+          markOrderAsSynced(orderCode);
           processedItemIds.add(item.id);
           processedCount++;
           notifyOrderSynced(order.id);
@@ -375,22 +378,20 @@ async function internalFlushSyncQueue(): Promise<{ processed: number; remaining:
         continue;
       } else if (item.type === 'customers_debt') {
         const { customers } = item.payload;
-        let ok = false;
         try {
-          // Priority 1: Direct Google Sheets API v4
+          // Only sync full customer balances table when Admin/Cashier has an active Google Sheets OAuth token.
+          // Customer devices must NOT POST bulk customer snapshots to Apps Script doPost (which would steal LockService from incoming orders).
           if (token && spreadsheetId) {
-            ok = await syncCustomersToGoogleSheet(token, spreadsheetId, customers);
-          }
-          // Priority 2: Webhook fallback
-          if (!ok && webhookUrl) {
-            ok = await syncCustomersViaWebhook(customers, webhookUrl);
-          }
-
-          if (ok) {
-            processedItemIds.add(item.id);
-            processedCount++;
+            const ok = await syncCustomersToGoogleSheet(token, spreadsheetId, customers);
+            if (ok) {
+              processedItemIds.add(item.id);
+              processedCount++;
+            } else {
+              item.error = 'Sync customers returned false';
+            }
           } else {
-            item.error = 'Sync customers returned false';
+            // Sheet formulas calculate debts from سجل_الطلبات automatically; drop cleanly on customer devices
+            processedItemIds.add(item.id);
           }
         } catch (err: any) {
           item.error = err?.message || 'Network exception';

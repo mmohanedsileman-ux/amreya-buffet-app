@@ -44,7 +44,6 @@ import {
 } from './services/googleAuth';
 import { 
   createCafeOrdersSpreadsheet, 
-  appendOrderToGoogleSheet, 
   bulkSyncOrdersToGoogleSheet, 
   syncCustomersToGoogleSheet, 
   syncAllEmployeesToEmployeesSheet,
@@ -500,7 +499,7 @@ export default function App() {
   useEffect(() => {
     let isCancelled = false;
 
-    const runAutomatedSync = async () => {
+    const prepareSheetOnce = async () => {
       if (isCancelled || isPreparingSheetRef.current) return;
       const token = googleAccessToken || await getAccessToken();
       const sheetId = activeSpreadsheetId || DEFAULT_SPREADSHEET_ID;
@@ -512,29 +511,19 @@ export default function App() {
           setGoogleAccessToken(token);
         }
         await ensureSpreadsheetTabsAndHeaders(token, sheetId).catch(() => {});
-        if (orders.length > 0) {
-          await bulkSyncOrdersToGoogleSheet(token, sheetId, orders, customers).catch(console.warn);
-        }
       } catch (err) {
-        console.warn('Background auto-sync notice:', err);
+        console.warn('Background sheet prep notice:', err);
       } finally {
         isPreparingSheetRef.current = false;
       }
     };
 
-    // Run immediately
-    runAutomatedSync();
-
-    // Run continuously every 60 seconds (only when tab is visible)
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') runAutomatedSync();
-    }, 60000);
+    prepareSheetOnce();
 
     return () => {
       isCancelled = true;
-      clearInterval(interval);
     };
-  }, [googleAccessToken, activeSpreadsheetId, orders, customers]);
+  }, [googleAccessToken, activeSpreadsheetId]);
 
   const [isGoogleConnecting, setIsGoogleConnecting] = useState(false);
 
