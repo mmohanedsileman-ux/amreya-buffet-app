@@ -42,10 +42,10 @@ import {
   generateAccountsTsv,
   formatCustomerToEmployeesRow,
   parseCSVToMenuItems,
-  APPS_SCRIPT_TEMPLATE,
   getStoredWebhookUrl,
   setStoredWebhookUrl,
 } from '../services/googleSheets';
+import APPS_SCRIPT_TEMPLATE from '../../google-apps-script/Code.gs?raw';
 import { getOutboxQueue, flushSyncQueue, clearOutboxQueue } from '../services/syncQueue';
 
 interface SheetSyncModalProps {

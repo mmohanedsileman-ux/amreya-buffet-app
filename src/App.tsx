@@ -525,17 +525,14 @@ export default function App() {
     // Run immediately
     runAutomatedSync();
 
-    // Run continuously every 10 seconds
-    const interval = setInterval(runAutomatedSync, 10000);
-
-    // Run on tab focus
-    const onFocus = () => runAutomatedSync();
-    window.addEventListener('focus', onFocus);
+    // Run continuously every 60 seconds (only when tab is visible)
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') runAutomatedSync();
+    }, 60000);
 
     return () => {
       isCancelled = true;
       clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
     };
   }, [googleAccessToken, activeSpreadsheetId, orders, customers]);
 
@@ -569,15 +566,6 @@ export default function App() {
       setIsMenuSyncing(false);
     }
   }, [activeSpreadsheetId, googleAccessToken]);
-
-  // Automated background polling for menu updates from Google Sheets (runs on load and continuously every 10s)
-  useEffect(() => {
-    handleSyncMenuFromSheet().catch(() => {});
-    const interval = setInterval(() => {
-      handleSyncMenuFromSheet().catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [handleSyncMenuFromSheet]);
 
   // Synchronize payment checkmarks from Google Sheet (Column J: تم السداد)
   const handleSyncPaidOrdersAndDebts = useCallback(async (): Promise<boolean> => {
@@ -910,15 +898,22 @@ export default function App() {
     }
   }, []);
 
-  // Automated live polling for payment checkmarks (Column J: تم السداد) with instant tab focus sync
+  // Automated live polling for payment checkmarks (Column J: تم السداد) - throttled to protect Google Sheets performance
   useEffect(() => {
+    let lastRecheckAt = Date.now();
     handleSyncPaidOrdersAndDebts().catch(() => {});
     const interval = setInterval(() => {
-      handleSyncPaidOrdersAndDebts().catch(() => {});
-    }, 10000);
+      if (document.visibilityState === 'visible') {
+        lastRecheckAt = Date.now();
+        handleSyncPaidOrdersAndDebts().catch(() => {});
+      }
+    }, 60000);
 
     const onRecheck = () => {
-      handleSyncPaidOrdersAndDebts().catch(() => {});
+      if (document.visibilityState === 'visible' && Date.now() - lastRecheckAt > 30000) {
+        lastRecheckAt = Date.now();
+        handleSyncPaidOrdersAndDebts().catch(() => {});
+      }
     };
     window.addEventListener('focus', onRecheck);
     document.addEventListener('visibilitychange', onRecheck);
@@ -1036,37 +1031,36 @@ export default function App() {
     if (!spreadsheetId) return;
 
     // 1. Initial silent background sync on start
+    let lastRefreshAt = Date.now();
     const initialTimer = setTimeout(() => {
       handleSyncMenuFromSheet().catch(() => {});
       handleSyncEmployeesFromSheet().catch(() => {});
-    }, 1200);
+    }, 1500);
 
-    // 2. Periodic background polling every 45 seconds (auto-refresh)
+    // 2. Periodic background polling every 2 minutes (only when tab is visible)
     const interval = setInterval(() => {
-      handleSyncMenuFromSheet().catch(() => {});
-      handleSyncEmployeesFromSheet().catch(() => {});
-    }, 45000);
-
-    // 3. Auto-sync whenever tab regains focus or becomes visible
-    const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        lastRefreshAt = Date.now();
+        handleSyncMenuFromSheet().catch(() => {});
+        handleSyncEmployeesFromSheet().catch(() => {});
+      }
+    }, 120000);
+
+    // 3. Auto-sync when tab regains visibility (throttled to at most once every 45s)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastRefreshAt > 45000) {
+        lastRefreshAt = Date.now();
         handleSyncMenuFromSheet().catch(() => {});
         handleSyncEmployeesFromSheet().catch(() => {});
       }
     };
-    const handleFocus = () => {
-      handleSyncMenuFromSheet().catch(() => {});
-      handleSyncEmployeesFromSheet().catch(() => {});
-    };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
 
     return () => {
       clearTimeout(initialTimer);
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
     };
   }, [activeSpreadsheetId, googleAccessToken, handleSyncMenuFromSheet, handleSyncEmployeesFromSheet]);
 
@@ -1346,8 +1340,11 @@ export default function App() {
         return updatedCustomersList;
       });
 
-      // Automatically sync updated customer balance to Google Sheets!
-      enqueueCustomersDebtSync(updatedCustomersList);
+      // Defer customer debt sheet sync by 5s so the new order gets 100% exclusive priority first!
+      const customersSnapshot = updatedCustomersList;
+      setTimeout(() => {
+        enqueueCustomersDebtSync(customersSnapshot);
+      }, 5000);
 
       // If partial paid, record transaction
       if (newOrder.paidAmount > 0) {

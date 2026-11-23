@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -5,6 +6,36 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const FALLBACK_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+
+function parseAllowedAppsScriptUrl(candidate?: string | null): string | null {
+  if (!candidate || typeof candidate !== 'string') return null;
+  const trimmed = candidate.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === 'script.google.com' &&
+      parsed.pathname.startsWith('/macros/s/')
+    ) {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function resolveAuthoritativeWebhookUrl(customUrl?: string | null): string {
+  return (
+    parseAllowedAppsScriptUrl(customUrl) ||
+    parseAllowedAppsScriptUrl(process.env.APPS_SCRIPT_WEBHOOK_URL) ||
+    FALLBACK_WEBHOOK_URL
+  );
+}
 
 async function startServer() {
   const app = express();
@@ -76,7 +107,7 @@ async function startServer() {
   let cachedSyncDebtData: any = { success: true, paidOrderIds: [], customerDebts: {} };
   let hasValidCache = false;
   let lastSyncDebtTime = 0;
-  const CACHE_TTL_MS = 8000; // 8 seconds cache allows 10-second polling to fetch freshly updated data continuously
+  const CACHE_TTL_MS = 30000; // 30 seconds cache protects Google Sheets from polling storms
   let inFlightSyncDebtPromise: Promise<any> | null = null;
 
   async function fetchFromGoogleAppsScript(customUrl?: string | null): Promise<any> {
@@ -89,11 +120,8 @@ async function startServer() {
       const timeout = setTimeout(() => controller.abort(), 20000);
 
       try {
-        // Enforce safe allowed base domain to prevent SSRF (Server-Side Request Forgery)
-        const baseUrl = customUrl && customUrl.startsWith('https://script.google.com/')
-          ? customUrl
-          : 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
-
+        // Strictly validate outbound destination against Google Apps Script host allowlist
+        const baseUrl = resolveAuthoritativeWebhookUrl(customUrl);
         const sep = baseUrl.includes('?') ? '&' : '?';
         const webhookUrl = `${baseUrl}${sep}action=sync_debt&t=${Date.now()}`;
 
@@ -153,12 +181,11 @@ async function startServer() {
   // Pre-warm cache
   fetchFromGoogleAppsScript().catch(() => {});
 
-  // Secure API endpoint with rate limiter and domain validation
+  // Secure API endpoint with rate limiter and strict URL allowlist validation
   app.get('/api/sync_debt', apiRateLimiter, async (req, res) => {
     const now = Date.now();
     const rawUrl = typeof req.query.url === 'string' ? req.query.url : null;
-    // Prevent SSRF: only allow Google Apps Script URLs
-    const customUrl = rawUrl && rawUrl.startsWith('https://script.google.com/') ? rawUrl : null;
+    const customUrl = parseAllowedAppsScriptUrl(rawUrl);
 
     if (hasValidCache) {
       if (now - lastSyncDebtTime > CACHE_TTL_MS) {
@@ -173,21 +200,34 @@ async function startServer() {
 
   // Dedicated /api/submit_order endpoint for ultra-reliable mobile phone order submission
   app.post('/api/submit_order', apiRateLimiter, async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
-      let orderData = req.body;
-      if (typeof orderData === 'string') {
+      let rawBody = req.body;
+      if (typeof rawBody === 'string') {
         try {
-          orderData = JSON.parse(orderData);
+          rawBody = JSON.parse(rawBody);
         } catch {
           return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
         }
       }
-      if (!orderData || typeof orderData !== 'object') {
+      if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
         return res.status(400).json({ success: false, error: 'Missing order payload' });
       }
 
+      const hasValidRow = Array.isArray(rawBody.row) && rawBody.row.length > 0 && rawBody.row.length <= 20;
+      const hasOrderId = typeof rawBody.orderId === 'string' && rawBody.orderId.trim().length > 0;
+      if (!hasValidRow && !hasOrderId) {
+        return res.status(400).json({ success: false, error: 'Invalid order payload: missing orderId or row' });
+      }
+
+      const envSheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
+      const orderData = {
+        ...rawBody,
+        spreadsheetId: envSheetId || rawBody.spreadsheetId,
+      };
+
       const isRetry = Boolean(orderData.isRetry);
-      const webhookUrl = 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+      const webhookUrl = resolveAuthoritativeWebhookUrl();
 
       const postToGoogleSheet = async (payloadObj: any, timeoutMs = 15000) => {
         const controller = new AbortController();
@@ -228,14 +268,15 @@ async function startServer() {
 
       const parsed = result.parsed;
       const status = String(parsed.status || '').toLowerCase();
+      const resolvedOrderNumber = String(orderData.orderId || (Array.isArray(orderData.row) ? orderData.row[0] : '') || '');
 
       if (status === 'success' || status === 'ok') {
-        return res.json({ success: true, verified: true, row: parsed.row, sheetResult: parsed });
+        return res.json({ success: true, verified: true, orderNumber: resolvedOrderNumber, row: parsed.row, sheetResult: parsed });
       }
 
       if (status === 'already_exists') {
         if (isRetry) {
-          return res.json({ success: true, verified: true, row: parsed.row, sheetResult: parsed });
+          return res.json({ success: true, verified: true, orderNumber: resolvedOrderNumber, row: parsed.row, sheetResult: parsed });
         }
         const uniqueTag = `${String(Date.now()).slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
         const newOrderId = `ORD-${uniqueTag}`;
@@ -246,7 +287,7 @@ async function startServer() {
         };
         const retryRes = await postToGoogleSheet(retryPayload, 15000);
         if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
-          return res.json({ success: true, verified: true, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
+          return res.json({ success: true, verified: true, orderNumber: newOrderId, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
         }
         return res.status(502).json({ success: false, error: 'Order ID collision retry failed' });
       }
@@ -264,7 +305,7 @@ async function startServer() {
         };
         const retryRes = await postToGoogleSheet(retryPayload, 15000);
         if (retryRes.ok && retryRes.parsed && ['success', 'ok'].includes(String(retryRes.parsed.status || '').toLowerCase())) {
-          return res.json({ success: true, verified: true, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
+          return res.json({ success: true, verified: true, orderNumber: resolvedOrderNumber, row: retryRes.parsed.row, sheetResult: retryRes.parsed });
         }
         return res.status(502).json({ success: false, error: 'Duplicate-filter bypass retry failed' });
       }
@@ -272,14 +313,20 @@ async function startServer() {
       return res.status(502).json({ success: false, error: parsed.error || parsed.message || 'Google Sheet rejected the order', sheetResult: parsed });
     } catch (e: any) {
       console.error('Submit order proxy error:', e);
-      return res.status(500).json({ success: false, error: e?.message });
+      return res.status(500).json({ success: false, error: 'Internal server error' });
     }
   });
 
   // Health check endpoint for uptime and monitoring
   app.get('/api/health', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.json({
       status: 'ok',
+      contractVersion: '2.0',
+      configSource: {
+        webhook: process.env.APPS_SCRIPT_WEBHOOK_URL ? 'env' : 'default',
+        sheetId: process.env.GOOGLE_SHEET_ID ? 'env' : 'default',
+      },
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
     });

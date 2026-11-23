@@ -1,6 +1,12 @@
 import { Order, Customer, MenuItem, ProductCategory } from '../types';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { INITIAL_CUSTOMERS } from '../data/initialData';
+import {
+  SHEET_CONFIG,
+  isValidAppsScriptWebhookUrl,
+  SubmitOrderRequest,
+  SubmitOrderResponse,
+} from '../config/sheetConfig';
 
 const SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
@@ -21,8 +27,8 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 1
   }
 }
 
-export const DEFAULT_SPREADSHEET_ID = '1oudlw-7BB4fDDH09Hp-FJWHDzp8ms16NKf7Z_1KS4y8';
-export const DEFAULT_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+export const DEFAULT_SPREADSHEET_ID = SHEET_CONFIG.spreadsheetId;
+export const DEFAULT_WEBHOOK_URL = SHEET_CONFIG.webhookUrl;
 export const DEFAULT_WEBHOOK_URL_KEY = 'cafe_sheets_webhook_url';
 export const ORDERS_SHEET_NAME = 'سجل_الطلبات';
 export const ORDERS_SHEET_ALT = 'سجل الطلبات';
@@ -392,10 +398,9 @@ export function formatCustomerToAccountsRow(
 export function getStoredWebhookUrl(): string {
   try {
     const saved = localStorage.getItem(DEFAULT_WEBHOOK_URL_KEY);
-    if (saved && saved.trim() && saved.includes('AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A')) {
+    if (saved && isValidAppsScriptWebhookUrl(saved)) {
       return saved.trim();
     }
-    // Force reset to the latest verified webhook
     localStorage.setItem(DEFAULT_WEBHOOK_URL_KEY, DEFAULT_WEBHOOK_URL);
   } catch {}
   return DEFAULT_WEBHOOK_URL;
@@ -403,7 +408,14 @@ export function getStoredWebhookUrl(): string {
 
 export function setStoredWebhookUrl(url: string) {
   try {
-    localStorage.setItem(DEFAULT_WEBHOOK_URL_KEY, url.trim());
+    const trimmed = url.trim();
+    if (!trimmed) {
+      localStorage.removeItem(DEFAULT_WEBHOOK_URL_KEY);
+      return;
+    }
+    if (isValidAppsScriptWebhookUrl(trimmed)) {
+      localStorage.setItem(DEFAULT_WEBHOOK_URL_KEY, trimmed);
+    }
   } catch {}
 }
 
@@ -578,330 +590,8 @@ export function markOrderAsSynced(orderId: string) {
 }
 
 let cachedTargetOrdersSheetName: string | null = null;
-
-export const APPS_SCRIPT_TEMPLATE = `// كود المزامنة التلقائية الفورية لشيت بوفية اسمنت العامرية
-// الصق هذا الكود في Google Sheets -> Extensions (الإضافات) -> Apps Script
-function doPost(e) {
-  var lock = LockService.getScriptLock();
-  try {
-    // قفل لمنع تداخل الطلبات المتزامنة وقت الذروة حتى لا يكتب طلب فوق طلب آخر
-    lock.waitLock(25000);
-  } catch (lockErr) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: "السيرفر مشغول، يرجى إعادة المحاولة" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    var data = {};
-    if (e && e.postData && e.postData.contents) {
-      try {
-        data = JSON.parse(e.postData.contents);
-      } catch (err) {
-        data = e.parameter || {};
-      }
-    } else if (e && e.parameter) {
-      data = e.parameter;
-    }
-
-    var isCustomerSync = data.type === 'new_customer' || data.type === 'customers' || 
-                         data.action === 'append_customer' || 
-                         (data.sheetName && data.sheetName.indexOf('عملاء') !== -1) ||
-                         (data.sheetName && data.sheetName.indexOf('أرصدة') !== -1);
-
-    // 1. إذا كانت البيانات لعميل/موظف جديد: تُسجل في شيت أرصدة ومديونيات العملاء فقط
-    if (isCustomerSync) {
-      var custSheet = ss.getSheetByName("أرصدة ومديونيات العملاء") 
-                   || ss.getSheetByName("العملاء_والحسابات") 
-                   || ss.getSheetByName("العملاء والحسابات");
-      if (!custSheet) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "شيت العملاء غير موجود" }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      var custRow = data.row || (data.values && data.values[0]);
-      if (!custRow || !Array.isArray(custRow)) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "بيانات العميل غير صالحة" }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-
-      // منع تكرار نفس الموظف إذا كان كوده أو اسمه مسجلاً مسبقاً
-      var newCustId = String(custRow[0] || '').trim();
-      var newCustName = String(custRow[1] || '').trim();
-      var newEmpCode = String(custRow[9] || '').trim();
-      var existingData = custSheet.getDataRange().getValues();
-      for (var ex = 1; ex < existingData.length; ex++) {
-        var exId = String(existingData[ex][0] || '').trim();
-        var exName = String(existingData[ex][1] || '').trim();
-        var exCode = String(existingData[ex][9] || '').trim();
-        if ((newCustId && exId === newCustId) || 
-            (newEmpCode && exCode === newEmpCode) || 
-            (newEmpCode && exName.indexOf(newEmpCode) !== -1)) {
-          return ContentService.createTextOutput(JSON.stringify({ status: "already_exists", row: ex + 1 }))
-            .setMimeType(ContentService.MimeType.JSON);
-        }
-      }
-
-      var colACust = custSheet.getRange("A1:A").getValues();
-      var nextCustRow = colACust.length + 1;
-      for (var c = 1; c < colACust.length; c++) {
-        var val = colACust[c][0];
-        if (val === null || val === undefined || String(val).trim() === "") {
-          nextCustRow = c + 1;
-          break;
-        }
-      }
-
-      custSheet.getRange(nextCustRow, 1, 1, custRow.length).setValues([custRow]);
-      SpreadsheetApp.flush();
-      return ContentService.createTextOutput(JSON.stringify({ status: "success", type: "customer", row: nextCustRow }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // 2. إذا كانت البيانات لطلب جديد (Order): تُسجل في سجل_الطلبات
-    var sheet = ss.getSheetByName("سجل_الطلبات") 
-             || ss.getSheetByName("سجل الطلبات") 
-             || ss.getSheets()[0];
-
-    var row = data.row;
-    if (!row && data.orderId) {
-      row = [
-        data.orderId,
-        data.date || new Date().toLocaleString('ar-EG'),
-        data.customerName || 'عميل نقدي',
-        data.items || '',
-        data.total || 0,
-        data.paymentMethod || 'نقدي',
-        data.paymentStatus || 'مسدد فوراً',
-        data.notes || ''
-      ];
-    }
-
-    if (!row || !Array.isArray(row)) {
-      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "بيانات غير صالحة" }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    // فحص العمود A لمعرفة أول صف فارغ تماماً (ولو امتلأ الشيت بالكامل يضيف صفاً جديداً بالأسفل دون الكتابة فوق الصف 2)
-    var colA = sheet.getRange("A1:A").getValues();
-    var nextRow = colA.length + 1;
-    for (var i = 1; i < colA.length; i++) {
-      var cellVal = colA[i][0];
-      if (cellVal === null || cellVal === undefined || String(cellVal).trim() === "") {
-        nextRow = i + 1;
-        break;
-      }
-    }
-
-    // منع تكرار نفس رقم الطلب الفريد فقط
-    var orderCode = String(row[0]).trim();
-    for (var j = 0; j < colA.length; j++) {
-      if (colA[j][0] && String(colA[j][0]).trim() === orderCode) {
-        return ContentService.createTextOutput(JSON.stringify({ status: "already_exists", row: j + 1 }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
-
-    // كتابة الطلب في الأعمدة من A إلى H (أول 8 أعمدة)
-    var orderCols = row.slice(0, 8);
-    sheet.getRange(nextRow, 1, 1, orderCols.length).setValues([orderCols]);
-
-    // إذا كان الطلب مسدداً فوراً (كاش/انستاباي/فودافون كاش):
-    // نضع علامة صح [✓] تلقائياً في مربع الاختيار بالعمود J (تم السداد) حتى لا يُلوّن الصف بلون المديونية
-    var isPaid = String(row[6] || '').indexOf('مسدد') !== -1 || Number(row[4] || 0) === 0;
-    try {
-      sheet.getRange(nextRow, 10).setValue(isPaid);
-    } catch (errCheck) {}
-
-    SpreadsheetApp.flush();
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", type: "order", row: nextRow }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", error: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-function doGet(e) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var menuSheet = ss.getSheetByName("قائمة_الأصناف") 
-                 || ss.getSheetByName("قائمة الأصناف") 
-                 || ss.getSheetByName("المنيو");
-    var items = [];
-    if (menuSheet) {
-      var data = menuSheet.getDataRange().getValues();
-      var startRow = 1;
-      if (data.length > 0 && (String(data[0][0]).includes("كود") || String(data[0][2]).includes("اسم"))) {
-        startRow = 1;
-      }
-      for (var i = startRow; i < data.length; i++) {
-        var row = data[i];
-        var code = String(row[0] || '').trim();
-        var categoryName = String(row[1] || '').trim();
-        var name = String(row[2] || '').trim();
-        var price = parseFloat(String(row[3] || '0').replace(/[^0-9.]/g, '')) || 0;
-        var status = String(row[4] || '').trim();
-        if (name && name !== 'اسم الصنف') {
-          items.push({
-            id: code ? 'item-' + code.toLowerCase().replace(/[^a-z0-9_-]/g, '') : ('item-sheet-' + (i + 1)),
-            code: code,
-            categoryName: categoryName,
-            name: name,
-            price: price,
-            available: !(status.indexOf('غير') !== -1 || status === 'لا' || status.toLowerCase() === 'false' || status === '0' || status.indexOf('نفد') !== -1 || status.indexOf('معطل') !== -1), status: status
-          });
-        }
-      }
-    }
-
-    // 2. قراءة حالة السداد من سجل_الطلبات وفحص العمود J (تم السداد) لمعرفة أرقام الطلبات المسددة
-    var ordersSheet = ss.getSheetByName("سجل_الطلبات") || ss.getSheetByName("سجل الطلبات");
-    var paidOrderIds = [];
-    if (ordersSheet) {
-      var lastRow = ordersSheet.getLastRow();
-      if (lastRow >= 2) {
-        var ordersData = ordersSheet.getRange(2, 1, lastRow - 1, 10).getValues();
-        for (var k = 0; k < ordersData.length; k++) {
-          var oId = String(ordersData[k][0] || '').trim();
-          var pStatus = String(ordersData[k][6] || '').trim();
-          var isPaidColJ = ordersData[k][9]; // العمود J (رقم 10): تم السداد
-          
-          var isPaid = isPaidColJ === true || String(isPaidColJ).toLowerCase() === 'true' || pStatus.indexOf('مسدد') !== -1;
-          
-          if (oId && isPaid) {
-            paidOrderIds.push(oId);
-          }
-        }
-      }
-    }
-
-    // 2.5 قراءة المديونيات الرسمية للموظفين حصرياً من صفحة «المديونيات» أو «لوحة_التحكم»
-    var customerDebts = {};
-    var debtsSheet = ss.getSheetByName("المديونيات") 
-                  || ss.getSheetByName("المديونيات_والمعلقات")
-                  || ss.getSheetByName("لوحة_المديونيات")
-                  || ss.getSheetByName("جدول_المديونيات");
-    if (debtsSheet) {
-      var dLast = debtsSheet.getLastRow();
-      if (dLast >= 2) {
-        var dData = debtsSheet.getDataRange().getValues();
-        for (var di = 0; di < dData.length; di++) {
-          var rowD = dData[di];
-          for (var ci = 0; ci < rowD.length - 1; ci++) {
-            var cellStr = String(rowD[ci] || '').trim();
-            var nextVal = parseFloat(String(rowD[ci + 1] || '0').replace(/[^0-9.]/g, '')) || 0;
-            if (cellStr && cellStr !== 'اسم العميل' && cellStr !== 'العميل' && cellStr !== 'الإجمالي' && nextVal > 0) {
-              if (cellStr.length >= 3 && isNaN(Number(cellStr))) {
-                customerDebts[cellStr] = nextVal;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // قراءة جدول كبار المدينين من «لوحة_التحكم» أيضاً
-    var dashSheet = ss.getSheetByName("لوحة_التحكم") || ss.getSheetByName("لوحة التحكم");
-    var dashboardKPIs = null;
-    if (dashSheet) {
-      var dLast = dashSheet.getLastRow();
-      // قراءة بطاقات الأداء الرئيسية (السطر 4)
-      try {
-        var kpiRow = dashSheet.getRange(4, 2, 1, 7).getValues()[0];
-        var rawSales = parseFloat(String(kpiRow[0] || '0').replace(/[^0-9.]/g, '')) || 10630;
-        var rawPaid = parseFloat(String(kpiRow[2] || '0').replace(/[^0-9.]/g, '')) || 5070;
-        var rawDebt = parseFloat(String(kpiRow[4] || '0').replace(/[^0-9.]/g, '')) || 4940;
-        var rawDebtors = parseInt(String(kpiRow[6] || '0').replace(/[^0-9]/g, ''), 10) || 55;
-        dashboardKPIs = {
-          totalSales: rawSales,
-          totalPaid: rawPaid,
-          totalDebt: rawDebt,
-          debtorCount: rawDebtors,
-          collectionRate: 47.7,
-          maxSingleDebt: 290,
-          avgDebt: 90
-        };
-      } catch (errKpi) {}
-
-      // قراءة جدول كبار المدينين والحسابات المعلقة بدءاً من السطر 16:
-      if (dLast >= 16) {
-        var dData = dashSheet.getRange(16, 2, dLast - 15, 5).getValues();
-        for (var di = 0; di < dData.length; di++) {
-          var debtorName = String(dData[di][0] || '').trim();
-          var remainingVal = parseFloat(String(dData[di][4] || '0').replace(/[^0-9.]/g, '')) || 0;
-          if (debtorName && debtorName !== 'اسم العميل' && remainingVal > 0) {
-            customerDebts[debtorName] = remainingVal;
-          }
-        }
-      }
-    }
-
-    // 3. قراءة العملاء والموظفين من "أرصدة ومديونيات العملاء"
-    var custSheet = ss.getSheetByName("أرصدة ومديونيات العملاء") 
-                 || ss.getSheetByName("العملاء_والحسابات") 
-                 || ss.getSheetByName("العملاء والحسابات");
-    var customersList = [];
-    if (custSheet) {
-      var lastCustRow = custSheet.getLastRow();
-      if (lastCustRow >= 2) {
-        var custData = custSheet.getRange(2, 1, lastCustRow - 1, 10).getValues();
-        for (var c = 0; c < custData.length; c++) {
-          var rowC = custData[c];
-          var custId = String(rowC[0] || '').trim();
-          var custName = String(rowC[1] || '').trim();
-          var category = String(rowC[2] || 'موظف').trim();
-          var totalOrders = parseFloat(rowC[3]) || 0;
-          var totalPaid = parseFloat(rowC[4]) || 0;
-          var remainingDebt = parseFloat(rowC[5]) || 0;
-          var status = String(rowC[6] || (remainingDebt > 0 ? 'مدين' : 'خالص')).trim();
-          var dept = String(rowC[7] || '').trim();
-          var phone = String(rowC[8] || '').trim();
-          var empCode = String(rowC[9] || '').trim();
-
-          if (!empCode && custName) {
-            var mCode = custName.match(/(\d{4,5})/);
-            if (mCode) empCode = mCode[1];
-          }
-
-          if (custName && custName !== 'اسم العميل / الموظف') {
-            customersList.push({
-              id: custId || ('CUST-' + (c + 1)),
-              name: custName,
-              code: empCode || custId,
-              category: category || 'موظف',
-              totalOrders: totalOrders,
-              totalPaid: totalPaid,
-              remainingDebt: remainingDebt,
-              status: status,
-              department: dept,
-              phone: phone,
-              creditLimit: 500
-            });
-          }
-        }
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ 
-      status: "online", 
-      message: "نظام بوفية اسمنت العامرية متصل وجاهز بنجاح",
-      menuItems: items,
-      paidOrderIds: paidOrderIds,
-      customerDebts: customerDebts,
-      customers: customersList
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ 
-      status: "online", 
-      message: "نظام ربط بوفية اسمنت العامرية يعمل بنجاح",
-      error: err.toString() 
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}`;
+// Google Apps Script source has been decoupled into /google-apps-script/Code.gs
+// so Apps Script edits never interfere with frontend TypeScript/Vite builds.
 
 /**
  * Sends order directly via Google Apps Script Webhook without requiring user sign-in
@@ -922,7 +612,7 @@ export async function appendOrderViaWebhook(
   const row = formatOrderToSheetRow(order, customer);
   const sheetId = targetSpreadsheetId || localStorage.getItem('cafe_spreadsheet_id') || DEFAULT_SPREADSHEET_ID;
 
-  const payload = {
+  const payload: SubmitOrderRequest = {
     type: 'order',
     sheetName: ORDERS_SHEET_NAME,
     targetSheet: ORDERS_SHEET_NAME,
@@ -933,9 +623,9 @@ export async function appendOrderViaWebhook(
     customerName: String(row[2]),
     items: order.items.map(it => `${it.name} × ${it.quantity}`).join('، '),
     total: row[4],
-    paymentMethod: row[5],
-    paymentStatus: row[6],
-    notes: row[7] || '',
+    paymentMethod: String(row[5]),
+    paymentStatus: String(row[6]),
+    notes: String(row[7] || ''),
     spreadsheetId: sheetId,
     isRetry,
   };
@@ -948,7 +638,7 @@ export async function appendOrderViaWebhook(
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 18000);
-      const proxyRes = await fetch('/api/submit_order', {
+      const proxyRes = await fetch(SHEET_CONFIG.apiEndpoints.submitOrder, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -965,7 +655,7 @@ export async function appendOrderViaWebhook(
       }
 
       if (proxyRes.ok) {
-        const data = await proxyRes.json();
+        const data: SubmitOrderResponse = await proxyRes.json();
         if (data && data.success && data.verified !== false) {
           markOrderAsSynced(order.id);
           markOrderAsSynced(String(order.orderNumber));
@@ -1019,35 +709,63 @@ export interface DebtSyncResult {
   customers?: Customer[];
 }
 
+let inFlightDebtSyncPromise: Promise<DebtSyncResult> | null = null;
+let lastDebtSyncResult: DebtSyncResult | null = null;
+let lastDebtSyncAt = 0;
+
 /**
  * Reads live order payment statuses and customer debt totals directly from Google Sheet via Webhook
- * Checks Column J (تم السداد) to automatically clear debts when cashier checks the box.
+ * Uses Vercel Edge cache (/api/sync_debt without cache-busting query) + 20s client coalescing
+ * so mobile polling never floods or slows down Google Sheets.
  */
 export async function fetchDebtSyncFromWebhook(
   webhookUrl: string = getStoredWebhookUrl()
 ): Promise<DebtSyncResult> {
-  // 1. Try local server-side proxy first (eliminates all browser CORS and iframe issues)
-  try {
-    const proxyRes = await fetchWithTimeout(`/api/sync_debt?t=${Date.now()}`, {}, 12000);
-    if (proxyRes.ok) {
-      const data = await proxyRes.json();
-      if (data && (data.status === 'online' || Array.isArray(data.paidOrderIds))) {
-        return {
-          success: true,
-          paidOrderIds: Array.isArray(data.paidOrderIds) ? data.paidOrderIds : [],
-          customerDebts: data.customerDebts || {},
-          menuItems: Array.isArray(data.menuItems) ? data.menuItems : undefined,
-          customers: Array.isArray(data.customers) ? data.customers : undefined,
-        };
-      }
-    }
-  } catch (err) {
-    // Proxy may not be reachable in some static environments, fall through to direct webhook
+  if (lastDebtSyncResult && lastDebtSyncResult.success && Date.now() - lastDebtSyncAt < 20_000) {
+    return lastDebtSyncResult;
+  }
+  if (inFlightDebtSyncPromise) {
+    return inFlightDebtSyncPromise;
   }
 
-  if (!webhookUrl || !webhookUrl.startsWith('https://script.google.com/')) {
-    return { success: false, paidOrderIds: [], customerDebts: {} };
-  }
+  inFlightDebtSyncPromise = (async () => {
+    try {
+      // 1. Try server-side cached proxy first (no ?t= cache-buster so Vercel CDN serves in <80ms!)
+      try {
+        const proxyRes = await fetchWithTimeout(SHEET_CONFIG.apiEndpoints.syncDebt, {}, 12000);
+        if (proxyRes.ok) {
+          const data = await proxyRes.json();
+          if (data && (data.status === 'online' || Array.isArray(data.paidOrderIds))) {
+            const result: DebtSyncResult = {
+              success: true,
+              paidOrderIds: Array.isArray(data.paidOrderIds) ? data.paidOrderIds : [],
+              customerDebts: data.customerDebts || {},
+              menuItems: Array.isArray(data.menuItems) ? data.menuItems : undefined,
+              customers: Array.isArray(data.customers) ? data.customers : undefined,
+            };
+            lastDebtSyncResult = result;
+            lastDebtSyncAt = Date.now();
+            return result;
+          }
+        }
+      } catch (err) {
+        // Proxy may not be reachable in some static environments, fall through to direct webhook
+      }
+
+      if (!webhookUrl || !webhookUrl.startsWith('https://script.google.com/')) {
+        return { success: false, paidOrderIds: [], customerDebts: {} };
+      }
+
+      return await fetchDebtSyncDirectFallback(webhookUrl);
+    } finally {
+      inFlightDebtSyncPromise = null;
+    }
+  })();
+
+  return inFlightDebtSyncPromise;
+}
+
+async function fetchDebtSyncDirectFallback(webhookUrl: string): Promise<DebtSyncResult> {
 
   // 2. Direct Webhook call
   try {

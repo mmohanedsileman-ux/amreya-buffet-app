@@ -1,7 +1,31 @@
+const FALLBACK_WEBHOOK_URL =
+  'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+
+function resolveSafeWebhookUrl(): string {
+  const candidate = (process.env.APPS_SCRIPT_WEBHOOK_URL || '').trim();
+  if (candidate) {
+    try {
+      const parsed = new URL(candidate);
+      if (
+        parsed.protocol === 'https:' &&
+        parsed.hostname === 'script.google.com' &&
+        parsed.pathname.startsWith('/macros/s/')
+      ) {
+        return parsed.toString();
+      }
+    } catch {
+      // Fall back to verified production URL if env var is malformed
+    }
+  }
+  return FALLBACK_WEBHOOK_URL;
+}
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -12,22 +36,36 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    let orderData = req.body;
-    if (typeof orderData === 'string') {
+    let rawBody = req.body;
+    if (typeof rawBody === 'string') {
+      if (rawBody.length > 200_000) {
+        return res.status(413).json({ success: false, error: 'Payload too large' });
+      }
       try {
-        orderData = JSON.parse(orderData);
+        rawBody = JSON.parse(rawBody);
       } catch {
         return res.status(400).json({ success: false, error: 'Invalid JSON payload' });
       }
     }
 
-    if (!orderData || typeof orderData !== 'object') {
+    if (!rawBody || typeof rawBody !== 'object' || Array.isArray(rawBody)) {
       return res.status(400).json({ success: false, error: 'Missing order payload' });
     }
 
+    const hasValidRow = Array.isArray(rawBody.row) && rawBody.row.length > 0 && rawBody.row.length <= 20;
+    const hasOrderId = typeof rawBody.orderId === 'string' && rawBody.orderId.trim().length > 0;
+    if (!hasValidRow && !hasOrderId) {
+      return res.status(400).json({ success: false, error: 'Invalid order payload: missing orderId or row' });
+    }
+
+    const envSheetId = (process.env.GOOGLE_SHEET_ID || '').trim();
+    const orderData = {
+      ...rawBody,
+      spreadsheetId: envSheetId || rawBody.spreadsheetId,
+    };
+
     const isRetry = Boolean(orderData.isRetry);
-    const webhookUrl =
-      'https://script.google.com/macros/s/AKfycbyL2B7HxSxaox7qpl4tEX5FIFKK3Xqr6uAFCMER5ZvPv2trUQYFtxrgf_V8Du0pVLBw4A/exec';
+    const webhookUrl = resolveSafeWebhookUrl();
 
     const postToGoogleSheet = async (payloadObj: any, timeoutMs = 15000) => {
       const controller = new AbortController();
@@ -94,12 +132,14 @@ export default async function handler(req: any, res: any) {
 
     const parsed = result.parsed;
     const status = String(parsed.status || '').toLowerCase();
+    const resolvedOrderNumber = String(orderData.orderId || (Array.isArray(orderData.row) ? orderData.row[0] : '') || '');
 
     // Verified written to Google Sheet!
     if (status === 'success' || status === 'ok') {
       return res.status(200).json({
         success: true,
         verified: true,
+        orderNumber: resolvedOrderNumber,
         row: parsed.row,
         sheetResult: parsed,
         message: 'Order verified and recorded in Google Sheet',
@@ -114,6 +154,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
           success: true,
           verified: true,
+          orderNumber: resolvedOrderNumber,
           row: parsed.row,
           sheetResult: parsed,
           message: 'Order already recorded on earlier attempt',
@@ -132,6 +173,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
           success: true,
           verified: true,
+          orderNumber: newOrderId,
           row: retryRes.parsed.row,
           sheetResult: retryRes.parsed,
           message: 'Order recorded with fresh unique ID',
@@ -162,6 +204,7 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
           success: true,
           verified: true,
+          orderNumber: resolvedOrderNumber,
           row: retryRes.parsed.row,
           sheetResult: retryRes.parsed,
           message: 'Repeat order disambiguated and recorded in Google Sheet',
@@ -185,7 +228,7 @@ export default async function handler(req: any, res: any) {
     console.error('Submit order proxy error:', err);
     return res.status(500).json({
       success: false,
-      error: err?.message || 'Internal server error',
+      error: 'Internal server error',
     });
   }
 }
